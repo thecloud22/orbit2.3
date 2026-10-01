@@ -109,17 +109,17 @@ cmd_doctor() {
   say "Backend (optional): BACKEND=$BACKEND"
   if [ "$BACKEND" = dotnet ]; then
     if dotnet_ok; then ok ".NET SDK $(dotnet --version)"; else miss ".NET SDK 10 or newer ($(have dotnet && dotnet --version || echo 'not installed'))"; fi
-    if find_java21; then ok "JDK 21 (only needed with BACKEND=java)"; else warn "JDK 21 not found (only needed with BACKEND=java)"; fi
-    if have mvn; then ok "Maven (only needed with BACKEND=java)"; else warn "Maven not found (only needed with BACKEND=java)"; fi
   else
     if find_java21; then ok "JDK 21 ($JAVA_HOME)"; else miss "JDK 21 ($(have java && java -version 2>&1 | head -1 || echo 'not installed'))"; fi
     if have mvn; then ok "Maven $(mvn -v 2>/dev/null | head -1 | awk '{print $3}')"; else miss "Maven"; fi
     if dotnet_ok; then ok ".NET SDK $(dotnet --version) (only needed with BACKEND=dotnet)"; else warn ".NET SDK not found (only needed with BACKEND=dotnet)"; fi
   fi
-  if docker_ok; then ok "Docker is running"
-  elif have docker; then warn "Docker is installed but the daemon is not running: start Docker Desktop"
-  else miss "Docker (for local Postgres and Temporal; or bring your own)"; fi
-  if have temporal; then ok "Temporal CLI (can run 'temporal server start-dev' without Docker)"; else warn "Temporal CLI not installed (optional; Docker covers it)"; fi
+  # The demo needs a Postgres: a local server it can log in to, or Docker. Temporal needs nothing extra: the API embeds a dev server.
+  say "Postgres for ./claims.sh demo up"
+  if have psql && { have pg_isready && pg_isready -h "$DEMO_PG_HOST" -p "$DEMO_PG_PORT" >/dev/null 2>&1; }; then ok "A Postgres answers on $DEMO_PG_HOST:$DEMO_PG_PORT and psql is installed (set DEMO_PG_USER / DEMO_PG_PASSWORD if it needs a login)"
+  elif docker_ok; then ok "Docker is running, so the demo can start its own Postgres"
+  elif have docker; then warn "Docker is installed but the daemon is not running: start Docker Desktop, or point the demo at a Postgres you already run"
+  else warn "No Postgres found: run one on $DEMO_PG_HOST:$DEMO_PG_PORT (and install psql), or install and start Docker"; fi
   echo
   if node_ok; then echo "The web mock can run now:  ./claims.sh setup && ./claims.sh web"; else echo "Run ./claims.sh prereqs to install what is missing."; fi
 }
