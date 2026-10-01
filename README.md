@@ -70,4 +70,4 @@ Rule values (15- and 30-day limits, 3.5% interest, the $500,000 fast-track limit
 
 ## License
 
-[MIT](LICENSE). You can use, copy, modify and share it, including commercially. The claims, people and rule values are examples, not advice, and the software is provided as is.
+[The Unlicense](LICENSE): public domain, no copyright. Use it for anything, with no conditions and no attribution. The claims, people and rule values are examples, not advice, and the software is provided as is.
