@@ -1,0 +1,6 @@
+# Lint configuration for api/openapi.yaml (npx @redocly/cli lint api/openapi.yaml).
+extends:
+  - recommended
+rules:
+  # The spec deliberately lists the local development server.
+  no-server-example.com: off

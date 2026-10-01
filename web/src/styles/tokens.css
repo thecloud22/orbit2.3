@@ -1,0 +1,77 @@
+/* Design tokens — the "ledger" language from canvas board 01.4.
+   Cobalt is for actions only. Status is always shape + word + tint, never colour alone. */
+:root {
+  /* Surfaces */
+  --bg: #F2F1ED;
+  --surface: #FDFCFA;
+  --sunken: #F5F4F0;
+  --hover: #EFEDE7;
+
+  /* Chrome (global bar) */
+  --chrome: #16181B;
+  --chrome-2: #24272B;
+  --chrome-line: #3A3E44;
+  --chrome-ink: #ECEAE4;
+  --chrome-muted: #A9ADB3;
+  --chrome-accent: #8FB0DC;
+
+  /* Workspace tabs */
+  --tabs-bg: #E8E6E0;
+  --tabs-line: #D5D2CA;
+
+  /* Lines */
+  --line: #E4E2DB;
+  --line-strong: #CCC9C0;
+  --chip-line: #DAD7CF;
+
+  /* Ink */
+  --ink: #1C1E21;
+  --ink-2: #45494F;
+  --ink-3: #62666D;
+  --ink-4: #8E9197;
+
+  /* Action */
+  --accent: #1F4E8C;
+  --accent-hover: #183E70;
+  --accent-soft: #E3EAF4;
+  --accent-tint: #E9EFF7;
+  --accent-line: #C4D3E8;
+  --accent-on-dark: #DCE6F3;
+
+  /* Status tints (bg / ink) */
+  --neutral-bg: #EDEBE5;
+  --neutral-ink: #45494F;
+  --info-bg: #E8EEF7;
+  --info-ink: #1F4E8C;
+  --positive-bg: #E4F0E8;
+  --positive-ink: #1D6340;
+  --positive-bar: #3F7A58;
+  --caution-bg: #FBEFD8;
+  --caution-ink: #83530A;
+  --caution-mark: #B7781A;
+  --critical-bg: #FAE6E2;
+  --critical-ink: #A0281D;
+  --special-bg: #EFE9F6;
+  --special-ink: #5A3B8C;
+
+  /* Exceptions strip */
+  --strip-bg: #FDF6E7;
+  --strip-line: #EBD2A1;
+  --strip-line-soft: #F1E0BC;
+
+  /* Decision records (double-ruled, locked) */
+  --record-line: #BDB9AE;
+  --record-bg: #FAF9F6;
+
+  /* Proposed content (AI or extracted) — dashed until accepted */
+  --proposed-line: #8EA9CF;
+  --proposed-bg: #F8FAFD;
+
+  --badge: #E0A33A;
+
+  --font: 'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'Atkinson Hyperlegible Mono', ui-monospace, monospace;
+  --serif: 'Newsreader', Georgia, serif;
+
+  --radius: 4px;
+}

@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Life Claim Back and Forth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../claims-v2.css">
+<script src="../swimlane-v2.js"></script>
+<style>
+  .wrap > *, section > *, figure > * { min-width: 0; }
+  p code, li code, td code { overflow-wrap: anywhere; }
+  .canvas svg.sq { min-width: 980px; }
+  .d.sq .lbl { font-size: 12.5px; }
+  .d.sq .eb { font-size: 11px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; max-width: 1100px; }
+  .facts div { background: var(--surface); padding: 12px 14px; display: grid; gap: 2px; }
+  .facts b { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .facts span { color: var(--ink-2); font-size: 14px; }
+  .bounce { display: grid; gap: 14px; }
+  .kept { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px 40px; max-width: 1100px; }
+  .kept h3 { font-size: 15px; padding-block: 0 6px; border-bottom: 1px solid var(--rule); }
+  .kept p { color: var(--ink-2); font-size: 15px; }
+  ol.steps { margin: 0; padding-left: 22px; display: grid; gap: 6px; max-width: 86ch; color: var(--ink-2); }
+  ol.steps strong { color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="pagenav" aria-label="Claims docs">
+    <span class="ver">LIFE</span>
+    <a href="README.md">Life claim README</a>
+    <a href="README-back-and-forth.html" aria-current="page">Things bounce back</a>
+    <a href="../temporal-explained-v2.html">Temporal, explained</a>
+    <a href="../with-without-temporal-v2.html">With vs without</a>
+    <a href="../backend-architecture-v2.html">Architecture</a>
+    <a href="../failure-handling-v2.html">Failure handling</a>
+  </nav>
+
+  <header>
+    <div class="eyebrow">Claims platform · individual life · scenario</div>
+    <h1>Life claim: things bounce back</h1>
+    <p class="lede">This follows one life claim where five things come back instead of going straight through. A worker restarts in the middle of a run. A W-9 fails the IRS check. The death certificate is a photocopy, and the letter asking for a certified copy fails to send. Then, after payment, the bank returns one beneficiary's money. The claim goes back and forth between people, Postgres, Temporal and outside systems. It closes, reopens and closes again.</p>
+    <p class="note">It's the same claim as the <a href="README.md">life claim README</a>: Robert Castellano, whole life WL-0804419, $200,000, with Diane and Mark taking 50% each. The mock plays it step by step. Rule values (15 and 30 days, 3.5% interest, the retry settings) are examples.</p>
+  </header>
+
+  <p class="bigidea">Temporal never holds the claim while it waits. Each time something comes back, the change is saved in Postgres first. Then a new short workflow does whatever needs an outside system. If that work fails, Temporal retries it; if the retries run out, a person re-runs it. Waiting for a person, a document or a bank is a deadline row, not a sleeping workflow.</p>
+
+  <section aria-labelledby="glance-h">
+    <div class="head"><h2 id="glance-h">At a glance</h2></div>
+    <div class="facts">
+      <div><b>14</b><span>things happen after intake, from 25 Sep to 20 Oct</span></div>
+      <div><b>14</b><span>Temporal runs: 1 failed, then re-run under the same ID</span></div>
+      <div><b>16</b><span>deadline rows: 1 fired, 1 skipped, 14 closed without firing</span></div>
+      <div><b>2</b><span>closes: on 13 Oct, and again on 20 Oct after the payment came back</span></div>
+      <div><b>$200,460.27</b><span>paid in the end: $200,000 plus $460.27 interest for 24 days</span></div>
+      <div><b>0</b><span>service levels missed, out of 10; two exist only on this path</span></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="whole-h">
+    <div class="head">
+      <h2 id="whole-h">The whole claim, as one swimlane</h2>
+      <p class="note">Time runs left to right. Dashed red marks what came back. The lanes and marks are the same as on the other v2 pages.</p>
+    </div>
+    <figure>
+      <div class="canvas" data-swimlane="whole"></div>
+      <figcaption>
+        <span>Every workflow on the Temporal lane is short and ends within seconds. Nothing on that lane is open between the chips: while the claim waits, a row on the Deadlines lane is what waits.</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section class="bounce" id="b1" aria-labelledby="b1-h">
+    <div class="head"><span class="tag bad">Bounce 1 · Fri 25 Sep</span><h2 id="b1-h">A worker restarts in the middle of the intake run</h2></div>
+    <p class="note">The notice is saved with its outbox event, and the relay starts <code>orch-L-26-043310-intake</code>. Steps 1 to 8 run on worker A. During step 9, sending the acknowledgement and claim packets, a deploy restarts worker A before it reports back.</p>
+    <figure>
+      <div class="canvas" data-seq="b1"></div>
+    </figure>
+    <div class="kept">
+      <div><h3>What Temporal did</h3><p>When the activity timed out, Temporal scheduled step 9 again, and worker B picked it up. To continue after step 9, worker B replayed the workflow's history, so steps 1 to 8 used their recorded results and didn't run again. The run took 1 min 14 s instead of 41 s.</p></div>
+      <div><h3>Why no letter went twice</h3><p>Each send carries an idempotency key, such as <code>intake:&lt;claim&gt;:ack</code>. The letters service had already sent under that key, so the retry was a no-op. Temporal guarantees the retry; the key makes it safe. The Java slice already does this in <code>IntakeSetupService.sendAcknowledgementAndPackets</code>.</p></div>
+    </div>
+  </section>
+
+  <section class="bounce" id="b2" aria-labelledby="b2-h">
+    <div class="head"><span class="tag bad">Bounce 2 · 29 Sep to 2 Oct</span><h2 id="b2-h">Diane's W-9 fails the IRS check</h2></div>
+    <p class="note">Diane e-signs her claimant statement and W-9 in the portal. The event workflow checks her name and taxpayer number with the IRS and gets back "no match". She had transposed two digits. The corrected W-9 arrives three days later.</p>
+    <figure>
+      <div class="canvas" data-seq="b2"></div>
+    </figure>
+    <div class="kept">
+      <div><h3>What Temporal did</h3><p>Nothing special, and that's the point. "No match" is an answer, not an error, so the activity returned normally and the workflow took its not-enough branch. Temporal retries only when an activity fails, for example on a timeout or a 503.</p></div>
+      <div><h3>What Postgres kept</h3><p>The requirement stayed open, marked "Not enough · TIN mismatch". Its follow-up row D-706 closed, and D-708 was written to chase the correction in 7 days. The corrected W-9 is a new event and a new workflow, <code>event-E-9005</code>. It reads the requirement from Postgres and knows nothing about the first try.</p></div>
+    </div>
+  </section>
+
+  <section class="bounce" id="b3" aria-labelledby="b3-h">
+    <div class="head"><span class="tag bad">Bounce 3 · Thu 1 Oct</span><h2 id="b3-h">A photocopied certificate, and a letter that won't send</h2></div>
+    <p class="note">The mail room scans a death certificate with no raised seal. The rules can't accept it, so the workflow hands it to Rachel and ends. At 15:20 Rachel rejects it. Her decision is saved, but the letter asking Diane for a certified copy fails: the letters service is down. At 16:05, Claims ops re-runs the workflow. The certified copy arrives on 9 Oct.</p>
+    <figure>
+      <div class="canvas" data-seq="b3"></div>
+    </figure>
+    <div class="kept">
+      <div><h3>What Temporal did</h3><p>It retried the send five times, waiting 2, 4, 8 and 16 seconds between attempts, then stopped as the retry policy says. The run shows as failed in Temporal's UI, and its last step opened an ops task. Workflows start with the ID-reuse policy <code>ALLOW_DUPLICATE_FAILED_ONLY</code>, the setting in <code>TemporalWorkflowLauncher</code>. A completed ID can't start again, which is what makes a duplicate outbox start a no-op. A failed one can, which is why ops could start run 2 of <code>event-E-9004</code>: there's still one workflow per event. Under Temporal's default policy, a completed ID could start again.</p></div>
+      <div><h3>What wasn't lost</h3><p>Rachel's decision was saved in Postgres before the workflow started: requirement requested again, D-705 and D-709 closed, D-710 written. Only the letter waited, and it carried the same idempotency key on run 2, so Diane got one letter. Waiting for Rachel was a work item plus the review row D-709. It wasn't a workflow sleeping for four hours.</p></div>
+    </div>
+  </section>
+
+  <section class="bounce" id="b4" aria-labelledby="b4-h">
+    <div class="head"><span class="tag good">Bounce 4 · 5 to 7 Oct</span><h2 id="b4-h">Mark is late, so a deadline fires</h2></div>
+    <p class="note">This is the usual path when something is late, and it's here for comparison. Mark's statement isn't in by day 10, so his follow-up row comes due.</p>
+    <figure>
+      <div class="canvas" data-seq="b4"></div>
+    </figure>
+    <div class="kept">
+      <div><h3>What Temporal did</h3><p>A Temporal Schedule runs the dispatcher every minute. The dispatcher claims due rows with <code>FOR UPDATE SKIP LOCKED</code> and starts one workflow per row, with the row's ID as the workflow ID. <code>deadline-D-707</code> re-checks that the statement is still missing before it sends anything.</p></div>
+      <div><h3>What Postgres kept</h3><p>D-707 is marked done, and D-711 is written for 15 Oct. When Mark signs on 7 Oct, the same transaction that accepts his statement closes D-711, so it never fires. Of the 16 rows on this claim, D-707 is the only one that fires.</p></div>
+    </div>
+  </section>
+
+  <section class="bounce" id="b5" aria-labelledby="b5-h">
+    <div class="head"><span class="tag bad">Bounce 5 · 13 to 20 Oct</span><h2 id="b5-h">The bank returns Mark's payment, so the claim reopens</h2></div>
+    <p class="note">The daily payment run pays both beneficiaries on 13 Oct, and the claim closes. On 15 Oct the bank's return file shows Mark's EFT came back: the account is closed (R02). The claim reopens and waits for his new account. The replacement is paid on 20 Oct, and the claim closes again.</p>
+    <figure>
+      <div class="canvas" data-seq="b5"></div>
+    </figure>
+    <div class="kept">
+      <div><h3>Batch and Temporal, back and forth</h3><p>Batch never changes the claim itself. The returns job marks the payment item returned and writes an event. <code>event-E-9010</code> does the claim side: it reopens the claim, stops payments to the closed account, and asks Mark and tells Rachel. Mark's new account is another event. The replacement goes back to batch in the next payment run, and its confirmation closes the claim again.</p></div>
+      <div><h3>What Postgres kept</h3><p>The returned item stays as it was, because paid items are never edited. The replacement is a new item for the same amount: interest stopped at the first payment, because the return came from the closed account (an example rule). D-715 waited four days for the new details and closed without firing, and D-716 held the 2-business-day reissue target.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="feat-h">
+    <div class="head">
+      <h2 id="feat-h">What Temporal did, bounce by bounce</h2>
+      <p class="note">This is the list of machinery you would otherwise build and run yourselves. See <a href="../with-without-temporal-v2.html">With vs without Temporal</a> for the side-by-side view.</p>
+    </div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>What came back</th><th>Temporal feature</th><th>What it did on this claim</th><th>Without Temporal, you build</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">Worker restarted mid-step</td><td>Activity retries; history replay</td><td class="dim">Step 9 ran again on worker B; steps 1 to 8 came from history</td><td class="dim">A step-state table, leases and heartbeats, resume code</td></tr>
+          <tr><td class="strong">IRS said "no match"</td><td>Retries only on failures</td><td class="dim">No retry; the workflow took the not-enough branch</td><td class="dim">Error classification inside your own retry wrapper</td></tr>
+          <tr><td class="strong">Letters service down</td><td>Retry policy with backoff; failed runs visible</td><td class="dim">5 attempts over about 30 s; run marked failed; ops task opened</td><td class="dim">A retry loop, a dead-letter table, an admin screen</td></tr>
+          <tr><td class="strong">Ops re-ran the letter</td><td>Workflow ID reuse after a failure</td><td class="dim"><code>event-E-9004</code> run 2: still one workflow per event</td><td class="dim">Dedupe rules on your jobs table</td></tr>
+          <tr><td class="strong">Mark was late</td><td>Schedules</td><td class="dim">The dispatcher every minute; <code>deadline-D-707</code> sent the reminder</td><td class="dim">Cron plus row locking</td></tr>
+          <tr><td class="strong">Documents and returns kept arriving</td><td>Short workflows keyed by event ID</td><td class="dim">12 event workflows, none open while the claim waited</td><td class="dim">A queue consumer with its own retries and dedupe</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="never-h">
+    <div class="head"><h2 id="never-h">What never happened</h2></div>
+    <ul class="decisions">
+      <li><strong>No workflow slept waiting.</strong><span>Waiting for Rachel, for Diane's correction, for the certified copy and for Mark's bank details were all deadline rows and work items in Postgres.</span></li>
+      <li><strong>No signal went to a long-running workflow.</strong><span>There isn't one. Each thing that happened started its own short workflow.</span></li>
+      <li><strong>Batch never changed the claim.</strong><span>The payment run and the returns job changed payment items and wrote events; workflows did the claim side.</span></li>
+      <li><strong>No paid item was edited.</strong><span>The returned item keeps its history, and the replacement is a new item.</span></li>
+      <li><strong>No letter went twice.</strong><span>Every send carries an idempotency key, so the retry after the restart and run 2 of the letter workflow were both safe.</span></li>
+      <li><strong>Nothing was lost in the outage.</strong><span>Rachel's decision was committed before the letter's workflow started. Only the letter waited.</span></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="sla-h">
+    <div class="head"><h2 id="sla-h">Service levels</h2><p class="note">Each one is enforced by a row in the deadlines table. The last two exist only on this path.</p></div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Service level</th><th>Rule</th><th>Source</th><th>Due</th><th>Row</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">First contact with the claimant</td><td class="dim">1 business day from notice</td><td class="dim">Internal</td><td class="num">Mon 28 Sep</td><td><code>D-703</code></td><td>Met 28 Sep</td></tr>
+          <tr><td class="strong">Acknowledge the claim</td><td class="dim">15 days from notice</td><td class="dim">State rule</td><td class="num">Sat 10 Oct</td><td><code>D-701</code></td><td>Met 25 Sep, same day</td></tr>
+          <tr><td class="strong">Claim forms to each beneficiary</td><td class="dim">15 days from notice</td><td class="dim">State rule</td><td class="num">Sat 10 Oct</td><td><code>D-702</code></td><td>Met 25 Sep, same day</td></tr>
+          <tr><td class="strong">Status letter while undecided</td><td class="dim">Every 30 days until decided</td><td class="dim">State rule</td><td class="num">Sun 25 Oct</td><td><code>D-704</code></td><td>Stopped 12 Oct: decided first</td></tr>
+          <tr><td class="strong">Review a document the rules can't accept</td><td class="dim">1 business day</td><td class="dim">Internal</td><td class="num">Fri 2 Oct</td><td><code>D-709</code></td><td>Met 1 Oct, same day</td></tr>
+          <tr><td class="strong">Decide after proof of loss</td><td class="dim">30 days from complete proof (9 Oct)</td><td class="dim">State rule</td><td class="num">Sun 8 Nov</td><td><code>D-712</code></td><td>Met 12 Oct</td></tr>
+          <tr><td class="strong">Examiner review</td><td class="dim">5 business days from complete proof</td><td class="dim">Internal</td><td class="num">Fri 16 Oct</td><td><code>D-713</code></td><td>Met 12 Oct</td></tr>
+          <tr><td class="strong">Pay after approval</td><td class="dim">2 business days from approval</td><td class="dim">Internal</td><td class="num">Wed 14 Oct</td><td><code>D-714</code></td><td>Met 13 Oct</td></tr>
+          <tr><td class="strong">Reissue a returned payment</td><td class="dim">2 business days from new bank details</td><td class="dim">Internal</td><td class="num">Wed 21 Oct</td><td><code>D-716</code></td><td>Met 20 Oct</td></tr>
+          <tr><td class="strong">Interest on the proceeds</td><td class="dim">3.5% a year, date of death to payment</td><td class="dim">State rule</td><td class="num">At payment</td><td class="dim">on the item</td><td>24 days, $460.27</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="rows-h">
+    <div class="head"><h2 id="rows-h">All 16 deadline rows</h2><p class="note">A row closes early when the thing it waits for happens first. Only D-707 fired.</p></div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Row</th><th>Kind</th><th>What</th><th>Due</th><th>How it closed</th></tr></thead>
+        <tbody>
+          <tr><td><code>D-701</code></td><td><code>acknowledge_by</code></td><td class="dim">Acknowledge the claim to Diane</td><td class="num">Sat 10 Oct</td><td>Closed by the intake run when the acknowledgement went</td></tr>
+          <tr><td><code>D-702</code></td><td><code>forms_by</code></td><td class="dim">Claim forms to Diane and Mark</td><td class="num">Sat 10 Oct</td><td>Closed by the intake run when the packets went</td></tr>
+          <tr><td><code>D-703</code></td><td><code>first_contact_by</code></td><td class="dim">Examiner calls Diane</td><td class="num">Mon 28 Sep</td><td>Closed by Rachel's call at 09:40</td></tr>
+          <tr><td><code>D-704</code></td><td><code>status_letter</code></td><td class="dim">Status letter 1, if still undecided</td><td class="num">Sun 25 Oct</td><td>Skipped: decided on 12 Oct</td></tr>
+          <tr><td><code>D-705</code></td><td><code>requirement_follow_up</code></td><td class="dim">Certified death certificate</td><td class="num">Mon 5 Oct</td><td>Closed when the photocopy was rejected; D-710 follows the certified copy</td></tr>
+          <tr><td><code>D-706</code></td><td><code>requirement_follow_up</code></td><td class="dim">Diane's statement and W-9</td><td class="num">Mon 5 Oct</td><td>Closed on arrival (29 Sep); the TIN didn't match, so D-708 follows the correction</td></tr>
+          <tr><td><code>D-707</code></td><td><code>requirement_follow_up</code></td><td class="dim">Mark's statement and W-9</td><td class="num">Mon 5 Oct</td><td><strong>Fired</strong> Mon 5 Oct 08:00: reminder by email and text</td></tr>
+          <tr><td><code>D-708</code></td><td><code>requirement_follow_up</code></td><td class="dim">Diane's corrected W-9</td><td class="num">Tue 6 Oct</td><td>Closed: arrived 2 Oct</td></tr>
+          <tr><td><code>D-709</code></td><td><code>document_review_by</code></td><td class="dim">Rachel reviews the certificate the rules couldn't accept</td><td class="num">Fri 2 Oct</td><td>Closed: reviewed 1 Oct at 15:20</td></tr>
+          <tr><td><code>D-710</code></td><td><code>requirement_follow_up</code></td><td class="dim">Certified copy of the death certificate</td><td class="num">Sun 11 Oct</td><td>Closed: arrived 9 Oct</td></tr>
+          <tr><td><code>D-711</code></td><td><code>requirement_follow_up</code></td><td class="dim">Mark's statement, again</td><td class="num">Thu 15 Oct</td><td>Closed: arrived 7 Oct</td></tr>
+          <tr><td><code>D-712</code></td><td><code>decision_due</code></td><td class="dim">Decide the claim</td><td class="num">Sun 8 Nov</td><td>Met: decided 12 Oct</td></tr>
+          <tr><td><code>D-713</code></td><td><code>review_target</code></td><td class="dim">Examiner review done</td><td class="num">Fri 16 Oct</td><td>Met: decided 12 Oct</td></tr>
+          <tr><td><code>D-714</code></td><td><code>payment_due</code></td><td class="dim">Pay Diane and Mark</td><td class="num">Wed 14 Oct</td><td>Met: paid in the 13 Oct run</td></tr>
+          <tr><td><code>D-715</code></td><td><code>bank_details_by</code></td><td class="dim">Mark gives new bank details</td><td class="num">Sun 25 Oct</td><td>Closed: new account added 19 Oct</td></tr>
+          <tr><td><code>D-716</code></td><td><code>payment_due</code></td><td class="dim">Pay Mark's replacement</td><td class="num">Wed 21 Oct</td><td>Met: paid in the 20 Oct run</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="runs-h">
+    <div class="head"><h2 id="runs-h">All 14 workflow runs</h2><p class="note">Each run is keyed, starts from an event, a deadline or a person, and saves its result to Postgres in one transaction.</p></div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Run</th><th>When</th><th>Started by</th><th>What it did</th><th>Outcome</th></tr></thead>
+        <tbody>
+          <tr><td><code>orch-L-26-043310-intake</code></td><td class="num">25 Sep 10:03</td><td class="dim">Outbox, E-9001</td><td class="dim">Intake checks and set-up; step 9 ran again on worker B</td><td>Completed, 1 min 14 s</td></tr>
+          <tr><td><code>event-E-9002</code></td><td class="num">29 Sep 14:10</td><td class="dim">Diane's statement</td><td class="dim">TIN check: no match; not enough; correction asked for</td><td>Completed</td></tr>
+          <tr><td><code>event-E-9003</code></td><td class="num">1 Oct 11:25</td><td class="dim">Scanned certificate</td><td class="dim">Photocopy: the rules can't accept it; review task for Rachel</td><td>Completed</td></tr>
+          <tr><td><code>event-E-9004</code></td><td class="num">1 Oct 15:20</td><td class="dim">Rachel's rejection</td><td class="dim">Letter: 5 attempts, 503; failure recorded; ops task</td><td><strong>Failed</strong></td></tr>
+          <tr><td><code>event-E-9004</code> run 2</td><td class="num">1 Oct 16:05</td><td class="dim">Claims ops, Temporal UI</td><td class="dim">Letter sent with the same key; ops task closed</td><td>Completed</td></tr>
+          <tr><td><code>event-E-9005</code></td><td class="num">2 Oct 18:05</td><td class="dim">Corrected W-9</td><td class="dim">TIN check: match; accepted; D-708 closed</td><td>Completed</td></tr>
+          <tr><td><code>deadline-D-707</code></td><td class="num">5 Oct 08:00</td><td class="dim">Dispatcher</td><td class="dim">Still missing: reminder to Mark; D-711 written</td><td>Completed</td></tr>
+          <tr><td><code>event-E-9006</code></td><td class="num">7 Oct 19:40</td><td class="dim">Mark's statement</td><td class="dim">Accepted; D-711 closed</td><td>Completed</td></tr>
+          <tr><td><code>event-E-9007</code></td><td class="num">9 Oct 12:10</td><td class="dim">Certified copy</td><td class="dim">Accepted; proof of loss complete; decision rows written</td><td>Completed</td></tr>
+          <tr><td><code>event-E-9008</code></td><td class="num">12 Oct 11:30</td><td class="dim">Rachel's decision</td><td class="dim">Approval letters; rider explanation; agent told</td><td>Completed</td></tr>
+          <tr><td><code>event-E-9009</code></td><td class="num">13 Oct 02:06</td><td class="dim">Items paid</td><td class="dim">Confirmations; claim closed</td><td>Completed</td></tr>
+          <tr><td><code>event-E-9010</code></td><td class="num">15 Oct 08:10</td><td class="dim">Returns job</td><td class="dim">Claim reopened; closed account stopped; Mark asked; D-715 written</td><td>Completed</td></tr>
+          <tr><td><code>event-E-9011</code></td><td class="num">19 Oct 20:15</td><td class="dim">Mark's new account</td><td class="dim">Account verified; replacement item cleared; D-716 written</td><td>Completed</td></tr>
+          <tr><td><code>event-E-9012</code></td><td class="num">20 Oct 02:06</td><td class="dim">Replacement paid</td><td class="dim">Confirmation; claim closed again</td><td>Completed</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="try-h">
+    <div class="head"><h2 id="try-h">Play it in the mock</h2></div>
+    <ol class="steps">
+      <li>Run <code>./claims.sh web</code>, or <code>cd web &amp;&amp; npm run dev</code>, and open <code>http://localhost:5173/#/intake/life</code>.</li>
+      <li><strong>Caller:</strong> tick both identity checks and answer the agent question.</li>
+      <li><strong>The deceased:</strong> under <em>How the mock plays this claim</em>, choose <strong>Things bounce back</strong>.</li>
+      <li><strong>Policies:</strong> tick the read-back. <strong>Beneficiaries:</strong> press <em>Fill sample answers</em> and answer "anyone else" with No. <strong>Review:</strong> tick the read-back and submit.</li>
+      <li>On <strong>Workflow &amp; SLA</strong>, press <strong>Play next</strong> 14 times. The <em>Workflow runs</em> tab shows each run with a "What Temporal did" note, including the failed run and its run 2. The claim's Documents, Payments and History sections change as you go.</li>
+    </ol>
+    <p class="note">To check it end to end: <code>node scripts/life-flow-check.mjs &lt;dir&gt; bounce</code> from <code>web/</code> runs the path in headless Chrome, saves screenshots and asserts 29 outcomes. The code is in <code>web/src/api/lifeFlow.ts</code>: <code>bounceScript</code> and the handlers under "Variation: things bounce back".</p>
+    <p class="note">The mock plays this whole scenario. The Java slice in <code>backend/</code> has the intake orchestration, with this retry policy (5 attempts, waits doubling from 2 s) and the idempotent letters from bounce 1; the ID-reuse policy from bounce 3; and the requirement follow-up and dispatcher from bounce 4. TIN matching, document review, the letter workflow and payment returns are still design only.</p>
+  </section>
+</div>
+
+<script>
+/* Sequence diagrams for the bounces. A figure is <div class="canvas" data-seq="key"></div>.
+   spec = { aria, parts: [{ id, n, s, tint: 'pg' | 'tmp' }], msgs: [{ a, b, t, k: 'start' | 'reply' | 'fail', at }] | { note: true, a, b, t } } */
+(function () {
+  'use strict';
+  var NS = 'http://www.w3.org/2000/svg';
+  var W = 1200, XA = 196, XB = 1110, TOP = 12, HEAD = 48, ROW = 36;
+  var FONT = '"Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, sans-serif';
+  var measure = null, seq = 0, specs = {};
+  function width(text) {
+    measure = measure || document.createElement('canvas').getContext('2d');
+    measure.font = '400 12.5px ' + FONT;
+    return measure.measureText(text).width;
+  }
+  function el(tag, attrs, parent, text) {
+    var node = document.createElementNS(NS, tag);
+    Object.keys(attrs).forEach(function (k) { node.setAttribute(k, attrs[k]); });
+    if (text !== undefined) node.textContent = text;
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+  function render(spec) {
+    var id = 'sq' + (++seq);
+    var n = spec.parts.length;
+    var span = (XB - XA) / (n - 1);
+    var x = {};
+    spec.parts.forEach(function (p, i) { x[p.id] = XA + i * span; });
+    var H = TOP + HEAD + 26 + spec.msgs.length * ROW + 8;
+    var svg = el('svg', { class: 'd sq', viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': spec.aria });
+    var defs = el('defs', {}, svg);
+    [['a', 'm-ink'], ['c', 'm-cob'], ['r', 'm-risk']].forEach(function (m) {
+      var mk = el('marker', { id: id + '-' + m[0], viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
+      el('path', { class: m[1], d: 'M0,0 L10,5 L0,10 z' }, mk);
+    });
+    var bw = Math.min(span - 18, 176);
+    spec.parts.forEach(function (p) {
+      var cx = x[p.id];
+      el('line', { class: 'life', x1: cx, y1: TOP + HEAD, x2: cx, y2: H - 6 }, svg);
+      el('rect', { class: 'box' + (p.tint ? ' ' + p.tint : ''), x: cx - bw / 2, y: TOP, width: bw, height: HEAD, rx: 6 }, svg);
+      el('text', { class: 't', x: cx, y: TOP + (p.s ? 21 : 29), 'text-anchor': 'middle' }, svg, p.n);
+      if (p.s) el('text', { class: 's', x: cx, y: TOP + 37, 'text-anchor': 'middle' }, svg, p.s);
+    });
+    var step = 0;
+    spec.msgs.forEach(function (m, i) {
+      var y = TOP + HEAD + 32 + i * ROW;
+      if (m.at) el('text', { class: 'eb', x: 12, y: y + 4 }, svg, m.at);
+      if (m.note) {
+        var xa = x[m.a], xb = x[m.b || m.a];
+        var lo = Math.min(xa, xb) - 70, hi = Math.max(xa, xb) + 70;
+        el('rect', { class: 'box dash', x: lo, y: y - 14, width: hi - lo, height: 24, rx: 4 }, svg);
+        el('text', { class: 'lbl', x: (lo + hi) / 2, y: y + 2.5, 'text-anchor': 'middle' }, svg, m.t);
+        return;
+      }
+      step++;
+      var cls = m.k === 'fail' ? 'ln r dash' : m.k === 'reply' ? 'ln dash' : m.k === 'start' ? 'ln c' : 'ln';
+      var mk = 'url(#' + id + (m.k === 'fail' ? '-r' : m.k === 'start' ? '-c' : '-a') + ')';
+      var lc = 'lbl halo' + (m.k === 'fail' ? ' r' : m.k === 'start' ? ' c' : '');
+      var label = step + '. ' + m.t;
+      if (m.a === m.b) {
+        var sx = x[m.a];
+        el('path', { class: cls, d: 'M' + sx + ',' + (y - 9) + ' h30 v16 h-27', 'marker-end': mk }, svg);
+        var right = sx + 40 + width(label) < W - 6;
+        el('text', { class: lc, x: right ? sx + 40 : sx - 10, y: y + 3, 'text-anchor': right ? 'start' : 'end' }, svg, label);
+      } else {
+        var a = x[m.a], b = x[m.b], dir = b > a ? 1 : -1;
+        el('path', { class: cls, d: 'M' + (a + dir * 3) + ',' + y + ' H' + (b - dir * 4), 'marker-end': mk }, svg);
+        var mid = (a + b) / 2, half = width(label) / 2;
+        mid = Math.max(XA - 80 + half, Math.min(W - 6 - half, mid));
+        el('text', { class: lc, x: mid, y: y - 7, 'text-anchor': 'middle' }, svg, label);
+      }
+    });
+    return svg;
+  }
+  window.Seq = { add: function (key, spec) { specs[key] = spec; } };
+  var done = false;
+  function go() {
+    if (done) return;
+    done = true;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-seq]'), function (host) {
+      var spec = specs[host.getAttribute('data-seq')];
+      if (spec) { host.innerHTML = ''; host.appendChild(render(spec)); }
+    });
+  }
+  function start() {
+    if (!document.fonts || !document.fonts.load) { go(); return; }
+    document.fonts.load('400 12.5px "Atkinson Hyperlegible Next"').then(go, go);
+    setTimeout(go, 2500);
+  }
+  if (document.readyState === 'complete') start(); else window.addEventListener('load', start);
+})();
+
+(function () {
+  var API = { id: 'api', n: 'Claims API', s: 'Postgres + outbox', tint: 'pg' };
+  var TMP = { id: 'tmp', n: 'Temporal', s: 'short workflows', tint: 'tmp' };
+
+  Seq.add('b1', {
+    aria: 'Worker A restarts during step 9 of the intake run; Temporal retries step 9 on worker B, which replays the history so steps 1 to 8 do not run again; the letters service sees the same idempotency key and sends nothing twice.',
+    parts: [API, { id: 'relay', n: 'Outbox relay' }, { id: 'tmp', n: 'Temporal', s: 'service', tint: 'tmp' }, { id: 'wa', n: 'Worker A' }, { id: 'wb', n: 'Worker B' }, { id: 'ext', n: 'Letters service', s: 'and other systems' }],
+    msgs: [
+      { a: 'api', b: 'api', t: 'notice + event E-9001, one transaction', at: '10:03' },
+      { a: 'relay', b: 'tmp', k: 'start', t: 'start orch-L-26-043310-intake' },
+      { a: 'tmp', b: 'wa', t: 'steps 1–8: policies, sanctions, route…' },
+      { a: 'wa', b: 'ext', t: 'step 9: send packets · key intake:…:ack' },
+      { a: 'wa', b: 'wa', k: 'fail', t: 'restarted by a deploy before it reported back' },
+      { note: true, a: 'tmp', b: 'wb', t: 'the activity times out; Temporal schedules step 9 again' },
+      { a: 'tmp', b: 'wb', t: 'activity task: step 9, attempt 2' },
+      { a: 'wb', b: 'ext', t: 'send packets · same idempotency keys' },
+      { a: 'ext', b: 'wb', k: 'reply', t: 'already sent: nothing goes twice' },
+      { a: 'tmp', b: 'wb', t: 'workflow task: replay history, steps 1–8 not re-run' },
+      { a: 'wb', b: 'ext', t: 'step 10: tell the agent' },
+      { a: 'wb', b: 'api', t: 'save the outcome, one transaction · gathering evidence' }
+    ]
+  });
+
+  Seq.add('b2', {
+    aria: 'Diane uploads her W-9; the event workflow asks the IRS to match the name and TIN and gets no match, which is an answer so it is not retried; the requirement stays open and a follow-up row waits; the corrected W-9 is a new event and a new workflow that gets a match.',
+    parts: [{ id: 'diane', n: 'Diane', s: 'portal' }, API, TMP, { id: 'irs', n: 'IRS TIN matching' }, { id: 'note', n: 'Notifications' }],
+    msgs: [
+      { a: 'diane', b: 'api', t: 'statement + W-9', at: '29 Sep 14:10' },
+      { a: 'api', b: 'api', t: 'document + event E-9002, one transaction' },
+      { a: 'api', b: 'tmp', k: 'start', t: 'relay starts event-E-9002' },
+      { a: 'tmp', b: 'irs', t: 'do the name and TIN match?' },
+      { a: 'irs', b: 'tmp', k: 'reply', t: 'no match: an answer, so no retry' },
+      { a: 'tmp', b: 'note', t: 'ask Diane for a corrected W-9' },
+      { a: 'tmp', b: 'api', t: 'save: not enough · D-706 closed · D-708 due 6 Oct' },
+      { note: true, a: 'api', b: 'tmp', t: 'nothing runs for three days: D-708 waits in Postgres' },
+      { a: 'diane', b: 'api', t: 'corrected W-9', at: '2 Oct 18:05' },
+      { a: 'api', b: 'tmp', k: 'start', t: 'event E-9005: a new workflow' },
+      { a: 'tmp', b: 'irs', t: 'do the name and TIN match?' },
+      { a: 'irs', b: 'tmp', k: 'reply', t: 'match' },
+      { a: 'tmp', b: 'api', t: 'save: accepted · D-708 closed' }
+    ]
+  });
+
+  Seq.add('b3', {
+    aria: 'A photocopied certificate arrives; the workflow cannot accept it and opens a review task; Rachel rejects it; the letter workflow retries five times against a failing letters service and fails, opening an ops task; ops re-runs it under the same workflow ID and the letter is sent once; the certified copy completes proof of loss.',
+    parts: [{ id: 'mail', n: 'Mail room' }, { id: 'rachel', n: 'Rachel', s: 'examiner' }, API, TMP, { id: 'letters', n: 'Letters service' }, { id: 'ops', n: 'Claims ops' }],
+    msgs: [
+      { a: 'mail', b: 'api', t: 'scanned certificate · E-9003', at: '1 Oct 11:25' },
+      { a: 'api', b: 'tmp', k: 'start', t: 'event-E-9003: classify, read' },
+      { a: 'tmp', b: 'api', t: 'can’t accept: review task · D-709 due 2 Oct' },
+      { note: true, a: 'rachel', b: 'tmp', t: 'the workflow has ended; a work item waits for Rachel' },
+      { a: 'rachel', b: 'api', t: 'reject: not certified', at: '15:20' },
+      { a: 'api', b: 'api', t: 'requested again · D-705, D-709 closed · D-710 · E-9004' },
+      { a: 'api', b: 'tmp', k: 'start', t: 'event-E-9004, run 1' },
+      { a: 'tmp', b: 'letters', t: 'send the letter: attempts 1–5, waits 2, 4, 8, 16 s' },
+      { a: 'letters', b: 'tmp', k: 'fail', t: '503 every time: retries used up' },
+      { a: 'tmp', b: 'api', t: 'record the failure · ops task · run 1 failed' },
+      { a: 'ops', b: 'tmp', t: 're-run event-E-9004 (allowed: run 1 failed)', at: '16:05' },
+      { a: 'tmp', b: 'letters', t: 'send · same idempotency key' },
+      { a: 'letters', b: 'tmp', k: 'reply', t: 'sent' },
+      { a: 'tmp', b: 'api', t: 'letter sent · ops task closed' },
+      { a: 'mail', b: 'api', t: 'certified copy · E-9007', at: '9 Oct 12:10' },
+      { a: 'api', b: 'tmp', k: 'start', t: 'event-E-9007: accept → proof of loss complete' }
+    ]
+  });
+
+  Seq.add('b4', {
+    aria: 'The Temporal Schedule runs the dispatcher, which claims the due row D-707 and starts deadline-D-707; the workflow re-checks that the statement is still missing, sends a reminder and writes the next row D-711; when Mark signs, the same transaction closes D-711 so it never fires.',
+    parts: [{ id: 'sched', n: 'Temporal Schedule', s: 'every minute', tint: 'tmp' }, { id: 'disp', n: 'Dispatcher' }, { id: 'pg', n: 'Postgres', s: 'deadlines table', tint: 'pg' }, { id: 'tmp', n: 'Temporal', s: 'deadline workflow', tint: 'tmp' }, { id: 'notif', n: 'Notifications' }, { id: 'mark', n: 'Mark' }],
+    msgs: [
+      { a: 'sched', b: 'disp', k: 'start', t: 'run the dispatcher', at: '5 Oct 08:00' },
+      { a: 'disp', b: 'pg', t: 'claim due rows, SKIP LOCKED: D-707' },
+      { a: 'disp', b: 'tmp', k: 'start', t: 'start deadline-D-707' },
+      { a: 'tmp', b: 'pg', t: 're-check: statement still missing?' },
+      { a: 'pg', b: 'tmp', k: 'reply', t: 'yes' },
+      { a: 'tmp', b: 'notif', t: 'reminder by email and text' },
+      { a: 'notif', b: 'mark', t: 'reminder' },
+      { a: 'tmp', b: 'pg', t: 'save: D-707 done · D-711 due 15 Oct' },
+      { a: 'mark', b: 'pg', t: 'signs his statement · E-9006', at: '7 Oct 19:40' },
+      { a: 'pg', b: 'pg', t: 'D-711 closed in the same transaction: it never fires' }
+    ]
+  });
+
+  Seq.add('b5', {
+    aria: 'The payment run pays both beneficiaries and the claim closes; the bank returns Mark’s payment; the returns job marks the item returned and writes an event; an event workflow reopens the claim and asks Mark for a new account; a deadline row waits; Mark’s new account is a new event whose workflow verifies it and clears a replacement item; the next payment run pays it and the claim closes again.',
+    parts: [{ id: 'batch', n: 'Batch', s: 'payment run · returns job' }, { id: 'bank', n: 'Bank' }, API, TMP, { id: 'mark', n: 'Mark', s: 'portal' }, { id: 'verify', n: 'Bank verification' }],
+    msgs: [
+      { a: 'batch', b: 'bank', t: 'payment run: 2 EFTs, $200,460.27', at: '13 Oct 02:00' },
+      { a: 'batch', b: 'api', t: 'items paid · E-9009' },
+      { a: 'api', b: 'tmp', k: 'start', t: 'event-E-9009: confirmations, claim closed' },
+      { a: 'bank', b: 'batch', k: 'fail', t: 'return file: Mark’s EFT, R02', at: '15 Oct 06:30' },
+      { a: 'batch', b: 'api', t: 'item returned · E-9010 (batch never touches the claim)' },
+      { a: 'api', b: 'tmp', k: 'start', t: 'event-E-9010' },
+      { a: 'tmp', b: 'mark', t: 'email, text, portal task: add a new account' },
+      { a: 'tmp', b: 'api', t: 'claim reopened · D-715 new details due 25 Oct' },
+      { note: true, a: 'api', b: 'mark', t: 'four days pass: no workflow is open; D-715 waits' },
+      { a: 'mark', b: 'api', t: 'new account · E-9011', at: '19 Oct 20:15' },
+      { a: 'api', b: 'tmp', k: 'start', t: 'event-E-9011' },
+      { a: 'tmp', b: 'verify', t: 'verify the account' },
+      { a: 'verify', b: 'tmp', k: 'reply', t: 'open, name matches' },
+      { a: 'tmp', b: 'api', t: 'replacement item cleared · D-715 closed · D-716' },
+      { a: 'batch', b: 'bank', t: 'payment run: Mark’s replacement', at: '20 Oct 02:00' },
+      { a: 'batch', b: 'api', t: 'item paid · E-9012' },
+      { a: 'api', b: 'tmp', k: 'start', t: 'event-E-9012: claim closed again' }
+    ]
+  });
+})();
+
+(function () {
+  var P = 'people', S = 'state', D = 'deadlines', T = 'temporal', B = 'batch', E = 'external';
+  Swimlane.add('whole', {
+    aria: 'The life claim from notice to its second close: a worker restart during intake, a W-9 that fails the IRS check and is corrected, a photocopied certificate rejected by the examiner, a letter workflow that fails and is re-run, a late beneficiary whose follow-up fires, the decision and payment, a returned payment that reopens the claim, and the replacement payment that closes it again.',
+    phases: [
+      { n: '25 Sep', c: 'notice · intake', w: 1 },
+      { n: '28–29 Sep', c: 'W-9 bounces', w: 1.2, tone: 'bad' },
+      { n: '1 Oct', c: 'photocopy · letter fails', w: 1.8, tone: 'bad' },
+      { n: '2–9 Oct', c: 'fixes arrive', w: 2 },
+      { n: '12–13 Oct', c: 'decided · paid', w: 1.3 },
+      { n: '15 Oct', c: 'payment returned', w: 1.1, tone: 'bad' },
+      { n: '19–20 Oct', c: 'paid again', w: 1.3 }
+    ],
+    items: [
+      [P, 0, .5, 0, 'chip', 'Diane calls', 'p0'],
+      [P, 1, .5, 0, 'chip', 'Diane signs W-9', 'p1'],
+      [P, 2, .3, 0, 'chip', 'Rachel rejects', 'p2'],
+      [P, 2, .75, 1, 'chip', 'ops re-runs', 'p3'],
+      [P, 3, .25, 0, 'chip', 'Diane fixes W-9', 'p4'],
+      [P, 3, .62, 1, 'chip', 'Mark signs', 'p5'],
+      [P, 4, .5, 0, 'chip', 'Rachel approves', 'p6'],
+      [P, 6, .3, 0, 'chip', 'Mark: new account', 'p7'],
+      { k: 'track', lane: S, p: 0, to: 3, x0: .08, x1: .8, t: 'gathering evidence' },
+      { k: 'track', lane: S, p: 3, x0: .83, to: 4, x1: .27, t: 'in review' },
+      { k: 'track', lane: S, p: 4, x0: .3, x1: .74, t: 'approved' },
+      { k: 'track', lane: S, p: 4, x0: .77, to: 5, x1: .28, t: 'closed' },
+      { k: 'track', lane: S, p: 5, x0: .32, to: 6, x1: .52, t: 'reopened', tone: 'bad' },
+      { k: 'track', lane: S, p: 6, x0: .56, x1: .97, t: 'closed' },
+      [S, 1, .5, 1, 'neg', 'not enough: TIN'],
+      [S, 2, .3, 1, 'chip', 'requested again'],
+      [S, 3, .8, 1, 'chip', 'proof complete'],
+      [S, 5, .5, 1, 'neg', 'item returned'],
+      [S, 6, .5, 1, 'chip', 'replacement item'],
+      [D, 0, .5, 0, 'done', 'ack · forms'],
+      [D, 1, .5, 0, 'due', 'W-9 fix · 7 d'],
+      [D, 2, .25, 0, 'due', 'review · 1 d'],
+      [D, 2, .72, 1, 'due', 'copy · 10 d'],
+      [D, 3, .3, 0, 'due', 'Mark follow-up', 'd3'],
+      [D, 4, .5, 0, 'due', 'decide by 8 Nov'],
+      [D, 5, .5, 0, 'due', 'details · 10 d'],
+      [D, 6, .35, 0, 'done', 'details closed'],
+      [T, 0, .5, 0, 'wfE', 'intake run', 't0', 'p0'],
+      [T, 0, .5, 1, 'chip', 'retried on B'],
+      [T, 1, .5, 0, 'wfE', 'W-9: no match', 't1', 'p1'],
+      [T, 2, .22, 1, 'wfE', 'ask Rachel'],
+      [T, 2, .55, 0, 'fail', '5 tries, 503', 't3', 'p2'],
+      [T, 2, .8, 1, 'wfE', 'run 2 sent', 't4', 'p3'],
+      [T, 3, .25, 0, 'wfE', 'W-9 accepted', 't5', 'p4'],
+      [T, 3, .45, 1, 'wfD', 'remind Mark', 't6', 'd3'],
+      [T, 3, .8, 0, 'wfE', 'copy accepted'],
+      [T, 4, .5, 0, 'wfE', 'letters, close'],
+      [T, 5, .5, 0, 'wfE', 'reopen claim', 't8', 'b2'],
+      [T, 6, .35, 0, 'wfE', 'verify account', 't9', 'p7'],
+      [T, 6, .75, 1, 'wfE', 'close again'],
+      [B, 4, .6, 0, 'chip', 'payment run'],
+      [B, 5, .5, 0, 'chip', 'returns job', 'b2'],
+      [B, 6, .7, 0, 'chip', 'payment run'],
+      [E, 0, .5, 0, 'neg', 'worker restart'],
+      [E, 1, .5, 0, 'neg', 'IRS: no match'],
+      [E, 2, .3, 0, 'chip', 'photocopy'],
+      [E, 2, .72, 1, 'neg', 'letters 503'],
+      [E, 3, .8, 0, 'chip', 'certified copy'],
+      [E, 4, .6, 0, 'chip', 'bank'],
+      [E, 5, .5, 0, 'neg', 'R02: closed', 'e5'],
+      [E, 6, .35, 0, 'chip', 'bank verification']
+    ],
+    links: [{ a: 'e5', b: 'b2', style: 'plain' }]
+  });
+})();
+</script>
+</body>
+</html>

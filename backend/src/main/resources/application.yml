@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: claims-backend
+  datasource:
+    url: ${CLAIMS_DB_URL:jdbc:postgresql://localhost:5432/claims}
+    username: ${CLAIMS_DB_USER:claims}
+    password: ${CLAIMS_DB_PASSWORD:claims}
+  flyway:
+    locations: classpath:db/migration
+  jackson:
+    default-property-inclusion: always
+    serialization:
+      write-enums-using-to-string: true
+    mapper:
+      accept-case-insensitive-enums: true
+  mvc:
+    problemdetails:
+      enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+claims:
+  business:
+    zone: America/Chicago        # example: where the mock story is set; real value is per state rules
+    fire-time: "08:00"
+  dispatcher:
+    batch-size: 25
+    schedule-enabled: true       # the Temporal Schedule (every minute) that runs the dispatcher
+    local-poll-enabled: false    # in-process alternative, for dev or a namespace without Schedules
+  outbox:
+    poll-enabled: true
+    poll-interval: 1s
+  temporal:
+    enabled: true
+    target: ${TEMPORAL_TARGET:127.0.0.1:7233}
+    namespace: ${TEMPORAL_NAMESPACE:default}
+    task-queue: ${TEMPORAL_TASK_QUEUE:claims}
+    worker-enabled: true

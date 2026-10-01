@@ -1,0 +1,7 @@
+{
+  "name": "swimlane-diagram",
+  "private": true,
+  "type": "module",
+  "description": "Renders swimlane diagrams from a JSON spec to PNG",
+  "dependencies": { "puppeteer-core": "^25.12.0" }
+}

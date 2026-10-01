@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disability Claim Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --paper: #F4F6F9;
+    --surface: #FFFFFF;
+    --ink: #172031;
+    --ink-2: #3A4558;
+    --muted: #5A6476;
+    --rule: #CDD4DE;
+    --cobalt: #1F4E8C;
+    --cobalt-tint: #E7EEF8;
+    --sans: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper: #0F141C;
+      --surface: #171E29;
+      --ink: #E4E9F1;
+      --ink-2: #B7C1D0;
+      --muted: #939EB0;
+      --rule: #334052;
+      --cobalt: #8DB3E9;
+      --cobalt-tint: #1A2A42;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #0F141C;
+    --surface: #171E29;
+    --ink: #E4E9F1;
+    --ink-2: #B7C1D0;
+    --muted: #939EB0;
+    --rule: #334052;
+    --cobalt: #8DB3E9;
+    --cobalt-tint: #1A2A42;
+  }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    padding-inline: 16px;
+    padding-block: 40px 64px;
+  }
+  .wrap { max-width: 1340px; margin: 0 auto; display: grid; gap: 48px; }
+  header { display: grid; gap: 10px; max-width: 70ch; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; font-weight: 700; text-wrap: balance; }
+  h2 { margin: 0; font-size: 20px; line-height: 1.3; font-weight: 700; text-wrap: balance; }
+  p { margin: 0; }
+  .lede { color: var(--ink-2); }
+  a { color: var(--cobalt); }
+  a:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+
+  section { display: grid; gap: 16px; }
+  figure { margin: 0; display: grid; gap: 14px; }
+  .canvas { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; overflow-x: auto; }
+  .canvas svg { display: block; width: 100%; height: auto; }
+  .canvas svg.wide { min-width: 1100px; }
+  .canvas svg.seq { min-width: 960px; }
+  figcaption { color: var(--ink-2); max-width: 76ch; font-size: 15px; }
+
+  /* diagram marks */
+  .d text { font-family: var(--sans); fill: var(--ink); }
+  .d .t { font-size: 13.5px; font-weight: 600; }
+  .d .s { font-size: 11.5px; fill: var(--muted); }
+  .d .lbl { font-size: 11.5px; fill: var(--ink-2); }
+  .d .lbl.c { fill: var(--cobalt); }
+  .d .eb { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; fill: var(--muted); }
+  .d .eb.c { fill: var(--cobalt); }
+  .d .num { font-family: var(--mono); font-weight: 500; }
+  .d .halo { paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
+  .d .band { fill: var(--cobalt-tint); }
+  .d .laneline { stroke: var(--rule); stroke-width: 1; }
+  .d .phase { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 4 4; }
+  .d .chip { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1; }
+  .d .chip.wide { stroke-dasharray: 3 3; }
+  .d .run { fill: var(--surface); stroke: var(--cobalt); stroke-width: 1.5; }
+  .d .runtext { font-size: 10.5px; fill: var(--cobalt); font-family: var(--mono); }
+  .d .sig { fill: var(--cobalt); }
+  .d .sigstem { stroke: var(--cobalt); stroke-width: 1.5; }
+  .d .tick { fill: none; stroke: var(--ink-2); stroke-width: 1.25; }
+  .d .box { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.25; }
+  .d .box.tmp { fill: var(--cobalt-tint); stroke: var(--cobalt); stroke-width: 1.6; }
+  .d .life { stroke: var(--rule); stroke-width: 1.25; stroke-dasharray: 4 4; }
+  .d .ln { fill: none; stroke: var(--ink-2); stroke-width: 1.5; }
+  .d .ln.c { stroke: var(--cobalt); }
+  .d .m-ink { fill: var(--ink-2); }
+  .d .m-cob { fill: var(--cobalt); }
+  .d .clk circle { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.4; }
+  .d .clk path { fill: none; stroke: var(--ink-2); stroke-width: 1.4; stroke-linecap: round; }
+
+  .rules { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 32px; max-width: 1100px; }
+  .rules li { display: grid; gap: 4px; padding-block: 14px; border-top: 1px solid var(--rule); }
+  .rules strong { font-weight: 600; }
+  .rules span { color: var(--ink-2); font-size: 15px; }
+  .src { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Claims platform · individual disability income</div>
+    <h1>Disability Claim Flow</h1>
+    <p class="lede">One individual disability income claim, from filing to recovery. The picture shows which part of the backend owns each piece. The components are the ones on the <a href="backend-architecture-v1.html">Claims Backend Architecture</a> page.</p>
+  </header>
+
+  <section>
+    <h2>What goes where, over the life of the claim</h2>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1320 720" role="img" aria-label="Swimlane of a disability income claim across five phases: filing and intake, elimination period and evidence, decision, monthly benefits, and recovery and recurrence. People file, send evidence, decide and send monthly proof. The Claims API and Postgres hold the claim, documents, tasks, the locked decision and payment instructions. A Temporal workflow runs from intake to decision, then continues as new each month, then watches the recurrence window, receiving signals for documents, decisions, proof, returned payments and a new disability. Durable timers drive status letters, the elimination period, the decision limit, monthly proof of loss, the cost-of-living rider and the recurrence window. Batch jobs audit the clocks, build payment files, process bank returns, extract reserves and re-screen payees. External systems include policy admin, the records vendor, letters, the bank and actuarial valuation.">
+          <defs>
+            <g id="clk" class="clk"><circle r="7"/><path d="M0,-4 V0 H3"/></g>
+          </defs>
+
+          <!-- Temporal band -->
+          <rect class="band" x="8" y="248" width="1304" height="216"/>
+
+          <!-- lane lines -->
+          <line class="laneline" x1="8" y1="56" x2="1312" y2="56"/>
+          <line class="laneline" x1="8" y1="152" x2="1312" y2="152"/>
+          <line class="laneline" x1="8" y1="248" x2="1312" y2="248"/>
+          <line class="laneline" x1="8" y1="344" x2="1312" y2="344"/>
+          <line class="laneline" x1="8" y1="464" x2="1312" y2="464"/>
+          <line class="laneline" x1="8" y1="560" x2="1312" y2="560"/>
+          <line class="laneline" x1="8" y1="656" x2="1312" y2="656"/>
+          <line class="laneline" x1="164" y1="20" x2="164" y2="656"/>
+
+          <!-- phase dividers and names -->
+          <line class="phase" x1="330" y1="20" x2="330" y2="656"/>
+          <line class="phase" x1="590" y1="20" x2="590" y2="656"/>
+          <line class="phase" x1="740" y1="20" x2="740" y2="656"/>
+          <line class="phase" x1="1090" y1="20" x2="1090" y2="656"/>
+          <text class="eb" x="20" y="42">TIME →</text>
+          <text class="eb" x="250" y="42" text-anchor="middle">FILING &amp; INTAKE</text>
+          <text class="eb" x="460" y="42" text-anchor="middle">ELIMINATION PERIOD &amp; EVIDENCE</text>
+          <text class="eb" x="665" y="42" text-anchor="middle">DECISION</text>
+          <text class="eb" x="915" y="42" text-anchor="middle">MONTHLY BENEFITS · REPEATS</text>
+          <text class="eb" x="1200" y="42" text-anchor="middle">RECOVERY &amp; RECURRENCE</text>
+
+          <!-- lane names -->
+          <text class="t" x="20" y="98">People</text>
+          <text class="s" x="20" y="116">claimant · examiner</text>
+          <text class="t" x="20" y="194">Claims API</text>
+          <text class="s" x="20" y="212">+ Postgres</text>
+          <text class="t" x="20" y="290">Temporal</text>
+          <text class="s" x="20" y="308">workflow · signals</text>
+          <text class="t" x="20" y="398">Temporal</text>
+          <text class="s" x="20" y="416">durable timers</text>
+          <text class="t" x="20" y="506">Batch</text>
+          <text class="s" x="20" y="524">scheduled jobs</text>
+          <text class="t" x="20" y="602">External</text>
+          <text class="s" x="20" y="620">via activities or files</text>
+
+          <!-- L1 People -->
+          <rect class="chip" x="178" y="78" width="144" height="24" rx="3"/><text class="lbl" x="250" y="94" text-anchor="middle">claimant files claim</text>
+          <rect class="chip" x="202" y="110" width="96" height="24" rx="3"/><text class="lbl" x="250" y="126" text-anchor="middle">agent copied</text>
+          <rect class="chip" x="372" y="78" width="176" height="24" rx="3"/><text class="lbl" x="460" y="94" text-anchor="middle">physician statement (APS)</text>
+          <rect class="chip" x="372" y="110" width="176" height="24" rx="3"/><text class="lbl" x="460" y="126" text-anchor="middle">income proof: tax returns</text>
+          <rect class="chip" x="605" y="78" width="120" height="24" rx="3"/><text class="lbl" x="665" y="94" text-anchor="middle">examiner decides</text>
+          <rect class="chip" x="840" y="78" width="150" height="24" rx="3"/><text class="lbl" x="915" y="94" text-anchor="middle">monthly proof of loss</text>
+          <rect class="chip" x="830" y="110" width="170" height="24" rx="3"/><text class="lbl" x="915" y="126" text-anchor="middle">residual: monthly income</text>
+          <rect class="chip" x="1142" y="78" width="116" height="24" rx="3"/><text class="lbl" x="1200" y="94" text-anchor="middle">returns to work</text>
+          <rect class="chip" x="1130" y="110" width="140" height="24" rx="3"/><text class="lbl" x="1200" y="126" text-anchor="middle">benefit period ends</text>
+
+          <!-- L2 Claims API + Postgres -->
+          <rect class="chip" x="178" y="174" width="144" height="24" rx="3"/><text class="lbl" x="250" y="190" text-anchor="middle">claim + benefit line</text>
+          <rect class="chip" x="386" y="174" width="148" height="24" rx="3"/><text class="lbl" x="460" y="190" text-anchor="middle">documents to storage</text>
+          <rect class="chip" x="386" y="206" width="148" height="24" rx="3"/><text class="lbl" x="460" y="222" text-anchor="middle">examiner task queued</text>
+          <rect class="chip" x="607" y="174" width="116" height="24" rx="3"/><text class="lbl" x="665" y="190" text-anchor="middle">locked decision</text>
+          <rect class="chip" x="845" y="174" width="140" height="24" rx="3"/><text class="lbl" x="915" y="190" text-anchor="middle">payment instruction</text>
+          <rect class="chip" x="857" y="206" width="116" height="24" rx="3"/><text class="lbl" x="915" y="222" text-anchor="middle">benefit history</text>
+          <rect class="chip" x="1132" y="174" width="136" height="24" rx="3"/><text class="lbl" x="1200" y="190" text-anchor="middle">closed, reopenable</text>
+
+          <!-- L3 workflow runs -->
+          <rect class="run" x="178" y="268" width="554" height="18" rx="9"/>
+          <text class="runtext" x="192" y="281">run 1 · intake → decision</text>
+          <text class="eb c" x="915" y="262" text-anchor="middle">CONTINUE-AS-NEW EACH MONTH</text>
+          <rect class="run" x="748" y="268" width="78" height="18" rx="9"/><text class="runtext" x="787" y="281" text-anchor="middle">month 1</text>
+          <rect class="run" x="834" y="268" width="78" height="18" rx="9"/><text class="runtext" x="873" y="281" text-anchor="middle">month 2</text>
+          <rect class="run" x="920" y="268" width="78" height="18" rx="9"/><text class="runtext" x="959" y="281" text-anchor="middle">month 3</text>
+          <rect class="run" x="1006" y="268" width="76" height="18" rx="9"/><text class="runtext" x="1044" y="281" text-anchor="middle">month n</text>
+          <rect class="run" x="1098" y="268" width="202" height="18" rx="9"/><text class="runtext" x="1199" y="281" text-anchor="middle">recurrence watch</text>
+
+          <!-- L3 signals -->
+          <line class="sigstem" x1="186" y1="287" x2="186" y2="300"/><polygon class="sig" points="181,294 191,294 186,287"/>
+          <text class="lbl c" x="178" y="316">started by API</text>
+          <line class="sigstem" x1="460" y1="287" x2="460" y2="300"/><polygon class="sig" points="455,294 465,294 460,287"/>
+          <text class="lbl c" x="460" y="316" text-anchor="middle">document received</text>
+          <line class="sigstem" x1="665" y1="287" x2="665" y2="300"/><polygon class="sig" points="660,294 670,294 665,287"/>
+          <text class="lbl c" x="665" y="316" text-anchor="middle">decision recorded</text>
+          <line class="sigstem" x1="787" y1="287" x2="787" y2="300"/><polygon class="sig" points="782,294 792,294 787,287"/>
+          <text class="lbl c" x="787" y="316" text-anchor="middle">proof received</text>
+          <line class="sigstem" x1="959" y1="287" x2="959" y2="300"/><polygon class="sig" points="954,294 964,294 959,287"/>
+          <text class="lbl c" x="959" y="316" text-anchor="middle">payment returned</text>
+          <line class="sigstem" x1="1200" y1="287" x2="1200" y2="300"/><polygon class="sig" points="1195,294 1205,294 1200,287"/>
+          <text class="lbl c" x="1200" y="316" text-anchor="middle">disabled again:</text>
+          <text class="lbl c" x="1200" y="331" text-anchor="middle">same claim, no new elimination period</text>
+
+          <!-- L4 timers, row A -->
+          <text class="lbl" x="178" y="366">status letter every 30 days</text>
+          <line class="tick" x1="178" y1="376" x2="650" y2="376"/><line class="tick" x1="178" y1="370" x2="178" y2="382"/>
+          <use href="#clk" x="290" y="376"/><use href="#clk" x="410" y="376"/><use href="#clk" x="530" y="376"/><use href="#clk" x="650" y="376"/>
+          <text class="lbl" x="748" y="366">proof of loss due each month</text>
+          <line class="tick" x1="748" y1="376" x2="1044" y2="376"/><line class="tick" x1="748" y1="370" x2="748" y2="382"/>
+          <use href="#clk" x="787" y="376"/><use href="#clk" x="873" y="376"/><use href="#clk" x="959" y="376"/><use href="#clk" x="1044" y="376"/>
+          <text class="lbl" x="1098" y="366">recurrence window, e.g. 6 months</text>
+          <line class="tick" x1="1098" y1="376" x2="1289" y2="376"/><line class="tick" x1="1098" y1="370" x2="1098" y2="382"/>
+          <use href="#clk" x="1296" y="376"/>
+
+          <!-- L4 timers, row B -->
+          <text class="lbl" x="186" y="402">elimination period, e.g. 90 days</text>
+          <line class="tick" x1="186" y1="412" x2="533" y2="412"/><line class="tick" x1="186" y1="406" x2="186" y2="418"/>
+          <use href="#clk" x="540" y="412"/>
+          <text class="lbl" x="748" y="402">cost-of-living rider: yearly increase</text>
+          <line class="tick" x1="748" y1="412" x2="1075" y2="412"/><line class="tick" x1="748" y1="406" x2="748" y2="418"/>
+          <use href="#clk" x="1082" y="412"/>
+
+          <!-- L4 timers, row C -->
+          <text class="lbl" x="420" y="438">decision limit after proof of loss</text>
+          <line class="tick" x1="420" y1="448" x2="693" y2="448"/><line class="tick" x1="420" y1="442" x2="420" y2="454"/>
+          <use href="#clk" x="700" y="448"/>
+
+          <!-- L5 batch -->
+          <rect class="chip wide" x="178" y="486" width="554" height="24" rx="3"/><text class="lbl" x="455" y="502" text-anchor="middle">nightly clock audit: were letters and deadlines met?</text>
+          <rect class="chip" x="781" y="486" width="176" height="24" rx="3"/><text class="lbl" x="869" y="502" text-anchor="middle">payment file (ACH, check)</text>
+          <rect class="chip" x="965" y="486" width="100" height="24" rx="3"/><text class="lbl" x="1015" y="502" text-anchor="middle">bank returns</text>
+          <rect class="chip" x="784" y="518" width="116" height="24" rx="3"/><text class="lbl" x="842" y="534" text-anchor="middle">reserve extract</text>
+          <rect class="chip" x="908" y="518" width="140" height="24" rx="3"/><text class="lbl" x="978" y="534" text-anchor="middle">sanctions re-screen</text>
+          <rect class="chip" x="1118" y="486" width="164" height="24" rx="3"/><text class="lbl" x="1200" y="502" text-anchor="middle">archive after retention</text>
+
+          <!-- L6 external -->
+          <rect class="chip" x="177" y="582" width="146" height="24" rx="3"/><text class="lbl" x="250" y="598" text-anchor="middle">policy admin lookup</text>
+          <rect class="chip" x="190" y="614" width="120" height="24" rx="3"/><text class="lbl" x="250" y="630" text-anchor="middle">sanctions screen</text>
+          <rect class="chip" x="386" y="582" width="148" height="24" rx="3"/><text class="lbl" x="460" y="598" text-anchor="middle">records vendor (APS)</text>
+          <rect class="chip" x="402" y="614" width="116" height="24" rx="3"/><text class="lbl" x="460" y="630" text-anchor="middle">letters &amp; print</text>
+          <rect class="chip" x="610" y="582" width="110" height="24" rx="3"/><text class="lbl" x="665" y="598" text-anchor="middle">premium waiver</text>
+          <rect class="chip" x="610" y="614" width="110" height="24" rx="3"/><text class="lbl" x="665" y="630" text-anchor="middle">premium refund</text>
+          <rect class="chip" x="848" y="582" width="134" height="24" rx="3"/><text class="lbl" x="915" y="598" text-anchor="middle">bank (ACH, checks)</text>
+          <rect class="chip" x="845" y="614" width="140" height="24" rx="3"/><text class="lbl" x="915" y="630" text-anchor="middle">actuarial valuation</text>
+          <rect class="chip" x="1112" y="582" width="176" height="24" rx="3"/><text class="lbl" x="1200" y="598" text-anchor="middle">policy admin: waiver ends</text>
+
+          <!-- legend -->
+          <rect class="run" x="178" y="682" width="40" height="14" rx="7"/>
+          <text class="lbl" x="226" y="693">one workflow run</text>
+          <line class="sigstem" x1="370" y1="682" x2="370" y2="696"/><polygon class="sig" points="365,689 375,689 370,682"/>
+          <text class="lbl" x="382" y="693">signal into the workflow</text>
+          <use href="#clk" x="560" y="689"/>
+          <text class="lbl" x="574" y="693">durable timer (deadline at the clock)</text>
+        </svg>
+      </div>
+      <figcaption>Everything with a clock on this one claim sits in the shaded Temporal lanes. Every fact the claim produces sits in Postgres. Batch appears only where the work covers all claims at once: files, returns, reserves, re-screening. The workflow is one long run until the decision, then a fresh run each month, so its history stays small and each month starts on the latest code. Durations shown are examples; the real ones come from the policy and state rules.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Zoom in: one month of benefits</h2>
+    <figure>
+      <div class="canvas">
+        <svg class="d seq" viewBox="0 0 1220 560" role="img" aria-label="Sequence for one month of disability benefits. A timer tracks the proof-of-loss due date. The claimant uploads monthly proof; the API signals the workflow; worker activities calculate the benefit using the claim's pinned rules, screen the payee and write an approved payment instruction to Postgres. The nightly payment batch collects approved instructions, sends the ACH file to the bank and processes the returns file, signalling the workflow if a payment was returned. The workflow then continues as new for the next month.">
+          <defs>
+            <marker id="sh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="shc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+            <g id="clk2" class="clk"><circle r="7"/><path d="M0,-4 V0 H3"/></g>
+          </defs>
+
+          <!-- participants -->
+          <rect class="box" x="30" y="16" width="140" height="48" rx="4"/>
+          <text class="t" x="100" y="37" text-anchor="middle">Claimant</text>
+          <text class="s" x="100" y="54" text-anchor="middle">portal or agent</text>
+          <rect class="box" x="240" y="16" width="140" height="48" rx="4"/>
+          <text class="t" x="310" y="37" text-anchor="middle">Claims API</text>
+          <text class="s" x="310" y="54" text-anchor="middle">+ Postgres</text>
+          <rect class="box tmp" x="450" y="16" width="140" height="48" rx="4"/>
+          <text class="t" x="520" y="37" text-anchor="middle">Workflow</text>
+          <text class="s" x="520" y="54" text-anchor="middle">this month's run</text>
+          <rect class="box tmp" x="650" y="16" width="140" height="48" rx="4"/>
+          <text class="t" x="720" y="37" text-anchor="middle">Worker activities</text>
+          <text class="s" x="720" y="54" text-anchor="middle">rules, screening</text>
+          <rect class="box" x="850" y="16" width="140" height="48" rx="4"/>
+          <text class="t" x="920" y="37" text-anchor="middle">Payment batch</text>
+          <text class="s" x="920" y="54" text-anchor="middle">nightly</text>
+          <rect class="box" x="1050" y="16" width="140" height="48" rx="4"/>
+          <text class="t" x="1120" y="37" text-anchor="middle">Bank</text>
+          <text class="s" x="1120" y="54" text-anchor="middle">ACH, checks</text>
+
+          <!-- lifelines -->
+          <line class="life" x1="100" y1="64" x2="100" y2="544"/>
+          <line class="life" x1="310" y1="64" x2="310" y2="544"/>
+          <line class="life" x1="520" y1="64" x2="520" y2="544"/>
+          <line class="life" x1="720" y1="64" x2="720" y2="544"/>
+          <line class="life" x1="920" y1="64" x2="920" y2="544"/>
+          <line class="life" x1="1120" y1="64" x2="1120" y2="544"/>
+
+          <!-- timer -->
+          <use href="#clk2" x="520" y="98"/>
+          <text class="lbl halo" x="534" y="102">timer: proof of loss due, reminder letter if late</text>
+
+          <!-- messages -->
+          <line class="ln" x1="100" y1="140" x2="309" y2="140" marker-end="url(#sh)"/>
+          <text class="lbl halo" x="205" y="132" text-anchor="middle"><tspan class="num">1</tspan>  uploads monthly proof</text>
+
+          <line class="ln c" x1="310" y1="178" x2="519" y2="178" marker-end="url(#shc)"/>
+          <text class="lbl c halo" x="415" y="170" text-anchor="middle"><tspan class="num">2</tspan>  signal: proof received</text>
+
+          <line class="ln c" x1="520" y1="216" x2="719" y2="216" marker-end="url(#shc)"/>
+          <text class="lbl c halo" x="620" y="208" text-anchor="middle"><tspan class="num">3</tspan>  calculate benefit</text>
+
+          <line class="ln" x1="720" y1="254" x2="311" y2="254" marker-end="url(#sh)"/>
+          <text class="lbl halo" x="515" y="246" text-anchor="middle"><tspan class="num">4</tspan>  read the claim's pinned rules, write the calculation</text>
+
+          <line class="ln c" x1="520" y1="292" x2="719" y2="292" marker-end="url(#shc)"/>
+          <text class="lbl c halo" x="620" y="284" text-anchor="middle"><tspan class="num">5</tspan>  screen payee, approve</text>
+
+          <line class="ln" x1="720" y1="330" x2="311" y2="330" marker-end="url(#sh)"/>
+          <text class="lbl halo" x="515" y="322" text-anchor="middle"><tspan class="num">6</tspan>  write payment instruction: approved, due on the 1st</text>
+
+          <line class="ln" x1="920" y1="368" x2="311" y2="368" marker-end="url(#sh)"/>
+          <text class="lbl halo" x="615" y="360" text-anchor="middle"><tspan class="num">7</tspan>  collect all approved instructions, mark as sent</text>
+
+          <line class="ln" x1="920" y1="406" x2="1119" y2="406" marker-end="url(#sh)"/>
+          <text class="lbl halo" x="1020" y="398" text-anchor="middle"><tspan class="num">8</tspan>  send ACH file</text>
+
+          <line class="ln" x1="1120" y1="444" x2="921" y2="444" marker-end="url(#sh)"/>
+          <text class="lbl halo" x="1020" y="436" text-anchor="middle"><tspan class="num">9</tspan>  returns file</text>
+
+          <line class="ln c" x1="920" y1="482" x2="521" y2="482" marker-end="url(#shc)"/>
+          <text class="lbl c halo" x="720" y="474" text-anchor="middle"><tspan class="num">10</tspan>  signal: payment returned (only if one was)</text>
+
+          <path class="ln c" d="M520,508 H560 V528 H521" marker-end="url(#shc)"/>
+          <text class="lbl c halo" x="572" y="522"><tspan class="num">11</tspan>  continue-as-new: next month's run</text>
+        </svg>
+      </div>
+      <figcaption>Steps 1 to 6 happen for this one claim, as soon as proof arrives. Steps 7 to 9 happen once a night for every claim together. The two sides meet at exactly two points: the payment instruction row (6 to 7) and the returned-payment signal (10). The batch job never changes the claim itself, and the workflow never builds a bank file.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>The split in four lines</h2>
+    <ul class="rules">
+      <li><strong>Temporal owns the clocks</strong><span>Anything with a deadline or a wait on this one claim: elimination period, status letters, decision limit, monthly proof, anniversaries, recurrence window.</span></li>
+      <li><strong>Postgres owns the facts</strong><span>Claim, documents, tasks, the locked decision, each month's calculation, payment instructions, audit events.</span></li>
+      <li><strong>Batch owns files and totals</strong><span>Payment files, bank returns, reserve extracts, re-screening, the nightly clock audit. Work over all claims at once.</span></li>
+      <li><strong>They meet through a row or a signal</strong><span>A workflow hands work to batch by writing a row. Batch hands news to a workflow by sending a signal.</span></li>
+    </ul>
+    <p class="src">Based on <code>docs/backend-architecture.md</code> and the platform scope: individual disability income, including residual benefits. Durations are examples.</p>
+  </section>
+</div>
+</body>
+</html>

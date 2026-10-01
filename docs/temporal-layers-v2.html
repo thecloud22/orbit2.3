@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Temporal, Layer by Layer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="claims-v2.css">
+
+</head>
+<body>
+<div class="wrap">
+  <nav class="pagenav" aria-label="Claims backend v2">
+    <span class="ver">V2</span>
+    <a href="temporal-explained-v2.html">Temporal, explained</a>
+    <a href="temporal-layers-v2.html" aria-current="page">Layer by layer</a>
+    <a href="with-without-temporal-v2.html">With vs without</a>
+    <a href="backend-architecture-v2.html">Architecture</a>
+    <a href="intake-to-decision-v2.html">Intake to decision</a>
+    <a href="disability-scenarios-v2.html">Disability scenarios</a>
+    <a href="failure-handling-v2.html">Failure handling</a>
+    <a href="product-change-v2.html">Product changes</a>
+  </nav>
+
+  <header>
+    <div class="eyebrow">Claims platform · Temporal explained · example 1, in depth</div>
+    <h1>Temporal, Layer by Layer</h1>
+    <p class="lede">The same claim as <a href="temporal-explained-v2.html">How Temporal Runs a Claim</a>: Sam Ortiz, approved on day 42. Here it's taken apart one layer at a time, to answer three questions. What starts Temporal? What is the dispatcher? Who fires the 30-day and 60-day letters?</p>
+  </header>
+
+  <section>
+    <div class="head"><h2>Three short answers</h2></div>
+    <ul class="decisions">
+      <li><strong>What starts Temporal?</strong><span>Our code, almost always. Two small pieces of our code call Temporal's "start workflow": the <em>outbox relay</em>, when someone does something, and the <em>dispatcher</em>, when a deadline comes due. Temporal starts only one thing on its own: the dispatcher, once a minute, through a Schedule we set up once.</span></li>
+      <li><strong>What is the dispatcher?</strong><span>A tiny workflow of ours that runs every minute, for all claims at once. It asks Postgres "which deadlines are due now?" and starts one short workflow for each. It's the only thing that turns a date into action.</span></li>
+      <li><strong>Does Temporal fire the 30-day and 60-day letters?</strong><span>Not directly. The 30-day letter is a row in the deadlines table, due on day 30. On day 30 the dispatcher's query finds it and starts the letter workflow, and that workflow writes the day-60 row. Temporal holds no 30-day timer.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>The layers, and the only two ways in</h2>
+      <p class="note">Six layers, top to bottom. Path A on the left is how every event starts a workflow. Path B on the right is how every deadline does. Every run in Sam's claim takes one of these two paths: runs 1, 2, 3, 4, 6 and 7 take path A, and run 5 takes path B.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1250 636" role="img" aria-label="Six layers: people, Claims API, Postgres, Temporal Service, claims worker and outside systems. Path A: Sam uploads forms; the Claims API saves the document and an outbox row in one transaction; the outbox relay reads the row and asks Temporal to start workflow event-E-501; a claims worker runs it and its activities write to Postgres. Path B: a Temporal Schedule starts the dispatcher workflow every minute; the dispatcher finds deadline row D-311 due and asks Temporal to start workflow deadline-D-311; a worker runs it, sends the status letter through the letters vendor, marks D-311 done and writes D-312 for day 60. No person and no API call is involved in path B.">
+          <defs>
+            <marker id="la" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="lc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <!-- bands -->
+          <rect class="band pg" x="8" y="220" width="1234" height="100"/>
+          <rect class="band tmp" x="8" y="320" width="1234" height="110"/>
+          <line class="laneline" x1="8" y1="50" x2="1242" y2="50"/>
+          <line class="laneline" x1="8" y1="130" x2="1242" y2="130"/>
+          <line class="laneline" x1="8" y1="220" x2="1242" y2="220"/>
+          <line class="laneline" x1="8" y1="320" x2="1242" y2="320"/>
+          <line class="laneline" x1="8" y1="430" x2="1242" y2="430"/>
+          <line class="laneline" x1="8" y1="540" x2="1242" y2="540"/>
+          <line class="laneline" x1="8" y1="620" x2="1242" y2="620"/>
+          <line class="phase" x1="722" y1="10" x2="722" y2="620"/>
+
+          <text class="t" x="20" y="88">People</text>
+          <text class="s" x="20" y="105">and screens</text>
+          <text class="t" x="20" y="172">Claims API</text>
+          <text class="s" x="20" y="189">our Java service</text>
+          <text class="t" x="20" y="266">Postgres</text>
+          <text class="s" x="20" y="283">our data</text>
+          <text class="t" x="20" y="371">Temporal Service</text>
+          <text class="s" x="20" y="388">platform team</text>
+          <text class="t" x="20" y="481">Claims worker</text>
+          <text class="s" x="20" y="498">our workflow code</text>
+          <text class="t" x="20" y="584">Outside systems</text>
+
+          <text class="eb" x="240" y="24">PATH A · SOMETHING HAPPENS</text>
+          <text class="lbl" x="240" y="41">Sam uploads forms · day 8, 14:10</text>
+          <text class="eb" x="750" y="24">PATH B · A DATE ARRIVES</text>
+          <text class="lbl" x="750" y="41">the 30-day status letter · day 30, 09:00</text>
+
+          <!-- path A boxes -->
+          <rect class="it chip" x="290" y="76" width="190" height="28" rx="3"/>
+          <text class="lbl" x="385" y="95" text-anchor="middle">Sam uploads forms</text>
+          <rect class="box" x="240" y="146" width="210" height="58" rx="4"/>
+          <text class="t" x="345" y="170" text-anchor="middle">saves the upload</text>
+          <text class="s" x="345" y="188" text-anchor="middle">two rows, one transaction</text>
+          <rect class="box" x="490" y="146" width="210" height="58" rx="4"/>
+          <text class="t" x="595" y="170" text-anchor="middle">outbox relay</text>
+          <text class="s" x="595" y="188" text-anchor="middle">loop in the API, every second</text>
+          <rect class="box" x="240" y="244" width="210" height="56" rx="4"/>
+          <text class="t" x="345" y="267" text-anchor="middle">document row</text>
+          <text class="s" x="345" y="285" text-anchor="middle">forms for claim C-1042</text>
+          <rect class="box" x="490" y="244" width="210" height="56" rx="4"/>
+          <text class="t" x="595" y="267" text-anchor="middle">outbox row E-501</text>
+          <text class="s" x="595" y="285" text-anchor="middle">new → started</text>
+          <rect class="box tmp" x="490" y="344" width="210" height="66" rx="4"/>
+          <text class="t" x="595" y="368" text-anchor="middle">start event-E-501</text>
+          <text class="s" x="595" y="386" text-anchor="middle">history begins; a task goes</text>
+          <text class="s" x="595" y="401" text-anchor="middle">on the "claims" queue</text>
+          <rect class="box tmp" x="240" y="454" width="460" height="66" rx="4"/>
+          <text class="t" x="470" y="478" text-anchor="middle">DocumentReceived workflow · 15 s</text>
+          <text class="s" x="470" y="497" text-anchor="middle">activities: match to requirement · close the forms follow-up</text>
+          <text class="s" x="470" y="512" text-anchor="middle">· create an examiner task</text>
+          <text class="s" x="470" y="584" text-anchor="middle" style="font-style: italic">no outside calls in this run</text>
+
+          <!-- path A arrows -->
+          <line class="ln" x1="385" y1="104" x2="385" y2="145" marker-end="url(#la)"/>
+          <line class="ln" x1="345" y1="204" x2="345" y2="243" marker-end="url(#la)"/>
+          <path class="ln" d="M450,175 H470 V272 H489" marker-end="url(#la)"/>
+          <line class="ln" x1="595" y1="204" x2="595" y2="243" marker-end="url(#la)"/>
+          <path class="ln c" d="M700,175 H712 V377 H701" marker-end="url(#lc)"/>
+          <line class="ln c" x1="560" y1="410" x2="560" y2="453" marker-end="url(#lc)"/>
+          <line class="ln c" x1="650" y1="453" x2="650" y2="411" marker-end="url(#lc)"/>
+          <line class="ln" x1="300" y1="453" x2="300" y2="301" marker-end="url(#la)"/>
+
+          <!-- path B boxes -->
+          <text class="s" x="985" y="94" text-anchor="middle" style="font-style: italic">no person involved</text>
+          <text class="s" x="985" y="180" text-anchor="middle" style="font-style: italic">the Claims API isn't involved</text>
+          <rect class="box" x="750" y="236" width="230" height="68" rx="4"/>
+          <text class="t" x="865" y="256" text-anchor="middle">deadline row D-311</text>
+          <text class="s" x="865" y="273" text-anchor="middle">status letter, due day 30</text>
+          <text class="s" x="865" y="290" text-anchor="middle">open → dispatched → done</text>
+          <rect class="box" x="1000" y="236" width="220" height="68" rx="4"/>
+          <text class="t" x="1110" y="256" text-anchor="middle">deadline row D-312</text>
+          <text class="s" x="1110" y="273" text-anchor="middle">status letter, due day 60</text>
+          <text class="s" x="1110" y="290" text-anchor="middle">written by this run: open</text>
+          <rect class="box tmp" x="750" y="344" width="210" height="66" rx="4"/>
+          <text class="t" x="855" y="368" text-anchor="middle">Schedule</text>
+          <text class="s" x="855" y="386" text-anchor="middle">"deadline-dispatcher"</text>
+          <text class="s" x="855" y="401" text-anchor="middle">fires every minute, on its own</text>
+          <rect class="box tmp" x="1000" y="344" width="220" height="66" rx="4"/>
+          <text class="t" x="1110" y="368" text-anchor="middle">start deadline-D-311</text>
+          <text class="s" x="1110" y="386" text-anchor="middle">history begins; a second</text>
+          <text class="s" x="1110" y="401" text-anchor="middle">start is rejected</text>
+          <rect class="box tmp" x="750" y="454" width="210" height="66" rx="4"/>
+          <text class="t" x="855" y="478" text-anchor="middle">Dispatcher workflow</text>
+          <text class="s" x="855" y="497" text-anchor="middle">the 09:00 run, 2 s</text>
+          <text class="s" x="855" y="512" text-anchor="middle">for all claims</text>
+          <rect class="box tmp" x="1000" y="454" width="220" height="66" rx="4"/>
+          <text class="t" x="1110" y="478" text-anchor="middle">StatusLetter workflow</text>
+          <text class="s" x="1110" y="497" text-anchor="middle">deadline-D-311, 3 s</text>
+          <text class="s" x="1110" y="512" text-anchor="middle">claim still undecided? yes</text>
+          <rect class="it chip" x="1040" y="566" width="140" height="28" rx="3"/>
+          <text class="lbl" x="1110" y="585" text-anchor="middle">letters vendor</text>
+
+          <!-- path B arrows -->
+          <line class="ln c" x1="855" y1="410" x2="855" y2="453" marker-end="url(#lc)"/>
+          <path class="ln" d="M750,487 H738 V270 H749" marker-end="url(#la)"/>
+          <path class="ln c" d="M960,487 H980 V377 H999" marker-end="url(#lc)"/>
+          <line class="ln c" x1="1110" y1="410" x2="1110" y2="453" marker-end="url(#lc)"/>
+          <line class="ln" x1="1110" y1="520" x2="1110" y2="565" marker-end="url(#la)"/>
+          <path class="ln" d="M1220,487 H1234 V270 H1221" marker-end="url(#la)"/>
+
+          <!-- step numbers -->
+          <g class="mk hi"><circle cx="385" cy="124" r="10" style="fill: var(--ink)"/><text x="385" y="128" text-anchor="middle">1</text></g>
+          <g class="mk hi"><circle cx="345" cy="224" r="10" style="fill: var(--ink)"/><text x="345" y="228" text-anchor="middle">2</text></g>
+          <g class="mk hi"><circle cx="595" cy="224" r="10" style="fill: var(--ink)"/><text x="595" y="228" text-anchor="middle">3</text></g>
+          <g class="mk hi"><circle cx="712" cy="300" r="10" style="fill: var(--cobalt)"/><text x="712" y="304" text-anchor="middle">4</text></g>
+          <g class="mk hi"><circle cx="560" cy="432" r="10" style="fill: var(--cobalt)"/><text x="560" y="436" text-anchor="middle">5</text></g>
+          <g class="mk hi"><circle cx="300" cy="376" r="10" style="fill: var(--ink)"/><text x="300" y="380" text-anchor="middle">6</text></g>
+
+          <g class="mk hi"><circle cx="855" cy="432" r="10" style="fill: var(--cobalt)"/><text x="855" y="436" text-anchor="middle">1</text></g>
+          <g class="mk hi"><circle cx="738" cy="380" r="10" style="fill: var(--ink)"/><text x="738" y="384" text-anchor="middle">2</text></g>
+          <g class="mk hi"><circle cx="980" cy="432" r="10" style="fill: var(--cobalt)"/><text x="980" y="436" text-anchor="middle">3</text></g>
+          <g class="mk hi"><circle cx="1110" cy="432" r="10" style="fill: var(--cobalt)"/><text x="1110" y="436" text-anchor="middle">4</text></g>
+          <g class="mk hi"><circle cx="1110" cy="543" r="10" style="fill: var(--ink)"/><text x="1110" y="547" text-anchor="middle">5</text></g>
+          <g class="mk hi"><circle cx="1234" cy="380" r="10" style="fill: var(--ink)"/><text x="1234" y="384" text-anchor="middle">6</text></g>
+        </svg>
+      </div>
+      <figcaption><span>Blue arrows involve Temporal; dark arrows are our code talking to our data or to outside systems. The numbers match the steps below. The one thing to notice in path B: it starts in the Temporal layer, not with a person. That's the Schedule, the only thing Temporal starts by itself.</span></figcaption>
+    </figure>
+
+    <div class="twocol">
+      <div>
+        <h3>Path A · Sam uploads forms</h3>
+        <ol class="hist">
+          <li><span class="n">1</span><span class="tm">14:10:00</span><span>Sam uploads the claim forms. The portal calls the Claims API: <code>POST /claims/C-1042/documents</code>.</span></li>
+          <li><span class="n">2</span><span class="tm">14:10:00</span><span>The API saves two rows in one Postgres transaction: the document, and outbox row E-501 saying "a document arrived for C-1042". Then it answers Sam's browser. <span class="res">Temporal hasn't been touched yet. If the API crashed now, the outbox row would still be there.</span></span></li>
+          <li><span class="n">3</span><span class="tm">14:10:01</span><span>The outbox relay, a small loop inside the Claims API, asks Postgres for new outbox rows every second. It finds E-501.</span></li>
+          <li><span class="n">4</span><span class="tm">14:10:01</span><span>The relay asks Temporal to start a DocumentReceived workflow named <code>event-E-501</code>, then marks E-501 started. <span class="res">If it crashes before marking, it tries again later, and Temporal rejects the second start because the name is taken.</span></span></li>
+          <li><span class="n">5</span><span class="tm">14:10:01</span><span>Temporal records the start and puts a task on the "claims" queue. A claims worker, which is always asking that queue for work, picks it up and runs the workflow code.</span></li>
+          <li><span class="n">6</span><span class="tm">14:10:16</span><span>The workflow's activities write to Postgres: match the document to its requirement, close the forms follow-up deadline, create an examiner task. The run ends.</span></li>
+        </ol>
+      </div>
+      <div>
+        <h3>Path B · the 30-day status letter</h3>
+        <ol class="hist">
+          <li><span class="n">1</span><span class="tm">09:00:00</span><span>Temporal's Schedule starts a new dispatcher run, as it has every minute since we set it up. <span class="res">This is the only thing Temporal starts on its own, and it isn't about Sam's claim: it's for all claims.</span></span></li>
+          <li><span class="n">2</span><span class="tm">09:00:00</span><span>The dispatcher asks Postgres for deadline rows that are open and due by now, and marks them dispatched in the same statement. One of them is D-311, written on day 0 when intake set up Sam's claim.</span></li>
+          <li><span class="n">3</span><span class="tm">09:00:01</span><span>For each due row, the dispatcher asks Temporal to start a workflow named after it: <code>deadline-D-311</code>. The dispatcher run then ends.</span></li>
+          <li><span class="n">4</span><span class="tm">09:00:01</span><span>Temporal records the start, and a claims worker picks up the task, exactly as in path A.</span></li>
+          <li><span class="n">5</span><span class="tm">09:00:02</span><span>The StatusLetter workflow checks the claim first. Still undecided, so the letter is due. It sends the letter through the letters vendor.</span></li>
+          <li><span class="n">6</span><span class="tm">09:00:03</span><span>In one transaction it marks D-311 done and writes D-312, the next status letter, due on day 60. <span class="res">At 09:01 the dispatcher runs again and finds nothing for Sam: D-311 is done, and D-312 isn't due for 30 days.</span></span></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>The dispatcher, minute by minute</h2>
+      <p class="note">The dispatcher never waits for a date. It just asks, every minute, "what's due now?" Most minutes the answer is nothing.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 250" role="img" aria-label="Dispatcher runs at 08:57, 08:58, 08:59, 09:00, 09:01 and 09:02 find 0, 1, 0, 43, 0 and 2 due deadlines. At 09:00 the 43 due deadlines include Sam's D-311, and the dispatcher starts 43 short workflows, one per deadline.">
+          <defs>
+            <marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <line class="laneline" x1="60" y1="60" x2="1140" y2="60"/>
+          <text class="lbl" x="120" y="36" text-anchor="middle">08:57</text>
+          <text class="lbl" x="300" y="36" text-anchor="middle">08:58</text>
+          <text class="lbl" x="480" y="36" text-anchor="middle">08:59</text>
+          <text class="lbl" x="660" y="36" text-anchor="middle" style="font-weight: 600">09:00</text>
+          <text class="lbl" x="840" y="36" text-anchor="middle">09:01</text>
+          <text class="lbl" x="1020" y="36" text-anchor="middle">09:02</text>
+
+          <rect class="pill" x="60" y="48" width="120" height="24" rx="12"/><text class="lbl c" x="120" y="64" text-anchor="middle">dispatcher</text>
+          <rect class="pill" x="240" y="48" width="120" height="24" rx="12"/><text class="lbl c" x="300" y="64" text-anchor="middle">dispatcher</text>
+          <rect class="pill" x="420" y="48" width="120" height="24" rx="12"/><text class="lbl c" x="480" y="64" text-anchor="middle">dispatcher</text>
+          <rect class="pill" x="600" y="48" width="120" height="24" rx="12" style="stroke-width: 2.5"/><text class="lbl c" x="660" y="64" text-anchor="middle">dispatcher</text>
+          <rect class="pill" x="780" y="48" width="120" height="24" rx="12"/><text class="lbl c" x="840" y="64" text-anchor="middle">dispatcher</text>
+          <rect class="pill" x="960" y="48" width="120" height="24" rx="12"/><text class="lbl c" x="1020" y="64" text-anchor="middle">dispatcher</text>
+
+          <text class="s" x="120" y="92" text-anchor="middle">found 0</text>
+          <text class="s" x="300" y="92" text-anchor="middle">found 1</text>
+          <text class="s" x="480" y="92" text-anchor="middle">found 0</text>
+          <text class="lbl" x="660" y="92" text-anchor="middle" style="font-weight: 600">found 43, incl. D-311</text>
+          <text class="s" x="840" y="92" text-anchor="middle">found 0</text>
+          <text class="s" x="1020" y="92" text-anchor="middle">found 2</text>
+
+          <path class="ln c" d="M660,100 V124 H440 V150" marker-end="url(#ma)"/>
+          <path class="ln c" d="M660,124 H560 V150" marker-end="url(#ma)"/>
+          <path class="ln c" d="M660,124 V150" marker-end="url(#ma)"/>
+          <path class="ln c" d="M660,124 H760 V150" marker-end="url(#ma)"/>
+          <path class="ln c" d="M660,124 H880 V150" marker-end="url(#ma)"/>
+          <rect class="it wfD" x="385" y="152" width="110" height="24" rx="12"/><text class="tx wfD" x="440" y="168" text-anchor="middle">deadline-D-298</text>
+          <rect class="it wfD" x="505" y="152" width="110" height="24" rx="12" style="stroke-width: 2.5"/><text class="tx wfD" x="560" y="168" text-anchor="middle">deadline-D-311</text>
+          <rect class="it wfD" x="625" y="152" width="110" height="24" rx="12"/><text class="tx wfD" x="680" y="168" text-anchor="middle">deadline-D-315</text>
+          <rect class="it wfD" x="745" y="152" width="110" height="24" rx="12"/><text class="tx wfD" x="800" y="168" text-anchor="middle">deadline-D-322</text>
+          <rect class="it wfD" x="865" y="152" width="110" height="24" rx="12"/><text class="tx wfD" x="920" y="168" text-anchor="middle">… 39 more</text>
+          <text class="s" x="560" y="200" text-anchor="middle">Sam's status letter</text>
+          <text class="s" x="660" y="230" text-anchor="middle">each is its own short workflow, run in parallel by the claims workers</text>
+        </svg>
+      </div>
+      <figcaption><span>The Schedule's default is to skip a minute if the previous dispatcher run is still going, so runs never pile up. A letter can go out up to a minute after its due time, which is fine because deadlines are set days ahead of the legal limit. If the dispatcher stops, deadlines start going overdue, and the overdue alert fires within the hour (failure 2).</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Sam's deadlines table</h2>
+      <p class="note">What Postgres actually holds. The dispatcher only ever picks rows that are <code>open</code> and due, so closing a row is how a deadline is called off.</p>
+    </div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Row</th><th>Kind</th><th class="num">Due</th><th>Final status</th><th>Written by</th><th>Closed by</th></tr></thead>
+        <tbody>
+          <tr><td><code>D-301</code></td><td>acknowledge by</td><td class="num">day 15</td><td>closed</td><td class="dim">run 1, intake set-up</td><td class="dim">run 1, as soon as the letter was sent</td></tr>
+          <tr><td><code>D-302</code></td><td>forms follow-up</td><td class="num">day 14</td><td>closed</td><td class="dim">run 1</td><td class="dim">run 2, forms arrived day 8</td></tr>
+          <tr><td><code>D-303</code></td><td>APS follow-up</td><td class="num">day 14</td><td>closed</td><td class="dim">run 1</td><td class="dim">run 3, records arrived day 13</td></tr>
+          <tr><td><code>D-311</code></td><td>status letter</td><td class="num">day 30</td><td><strong>done: it fired</strong></td><td class="dim">run 1</td><td class="dim">run 5, after sending the letter</td></tr>
+          <tr><td><code>D-312</code></td><td>status letter</td><td class="num">day 60</td><td>cancelled</td><td class="dim">run 5</td><td class="dim">run 7, the claim was decided</td></tr>
+          <tr><td><code>D-320</code></td><td>decision limit</td><td class="num">day 46</td><td>closed</td><td class="dim">run 4, proof of loss complete</td><td class="dim">run 7, decided on day 42</td></tr>
+          <tr><td><code>D-330</code></td><td>next period opens</td><td class="num">day 121</td><td>open</td><td class="dim">run 7, benefit set-up</td><td class="dim">not yet: it opens month 2 and starts the monthly cycle</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note"><strong>So who stops the day-60 letter?</strong> The approval workflow on day 42 cancels D-312. On day 60 the dispatcher's query doesn't see it, so nothing happens. If that cancel had somehow been missed, the StatusLetter workflow would still check the claim first, find it decided, skip the letter and record why. There are two separate guards.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>The code, in four pieces</h2>
+      <p class="note">Sketches in Java, to show the shape. Check the exact method names against the Temporal SDK version the platform team runs.</p>
+    </div>
+    <div class="codepair two">
+      <div class="codecard">
+        <div class="eyebrow">1 · The Schedule · set up once, at deploy</div>
+<pre class="code"><span class="cm">// Temporal fires this every minute, by itself.</span>
+scheduleClient.createSchedule(
+  "deadline-dispatcher",
+  Schedule.newBuilder()
+    .setAction(ScheduleActionStartWorkflow.newBuilder()
+      .setWorkflowType(DispatcherWorkflow.class)
+      .setOptions(WorkflowOptions.newBuilder()
+        .setWorkflowId("deadline-dispatcher")
+        .setTaskQueue("claims").build())
+      .build())
+    .setSpec(ScheduleSpec.newBuilder()
+      .setIntervals(List.of(
+        new ScheduleIntervalSpec(Duration.ofMinutes(1))))
+      .build())
+    .build(),
+  ScheduleOptions.newBuilder().build());</pre>
+      </div>
+      <div class="codecard">
+        <div class="eyebrow">2 · The dispatcher · a workflow, run every minute</div>
+<pre class="code">public void run() {
+  <span class="cm">// activity: the SQL below</span>
+  List&lt;Due&gt; due = <span class="ac">act.claimDueDeadlines</span>(500);
+  for (Due d : due) {
+    <span class="cm">// activity: start "deadline-" + d.id()</span>
+    <span class="cm">// a name that's taken counts as done</span>
+    <span class="ac">act.startDeadlineWorkflow</span>(d);
+  }
+}
+
+<span class="cm">-- claimDueDeadlines</span>
+UPDATE deadline
+   SET status = 'dispatched', dispatched_at = now()
+ WHERE id IN (
+   SELECT id FROM deadline
+    WHERE status = 'open' AND due_at &lt;= now()
+    ORDER BY due_at LIMIT 500
+    FOR UPDATE SKIP LOCKED)
+RETURNING id, kind, claim_id;</pre>
+      </div>
+      <div class="codecard">
+        <div class="eyebrow">3 · One deadline's workflow · status letter</div>
+<pre class="code"><span class="cm">// Workflow ID: deadline-D-311</span>
+public void run(String deadlineId) {
+  Deadline d = <span class="ac">act.load</span>(deadlineId);
+  if (!<span class="ac">act.claimStillUndecided</span>(d.claimId())) {
+    <span class="ac">act.skip</span>(deadlineId, "claim decided");
+    return;
+  }
+  <span class="ac">act.sendStatusLetter</span>(d.claimId());
+  <span class="cm">// one transaction: D-311 done,</span>
+  <span class="cm">// next status letter written for +30 days</span>
+  <span class="ac">act.finish</span>(deadlineId, Duration.ofDays(30));
+}</pre>
+      </div>
+      <div class="codecard">
+        <div class="eyebrow">4 · The outbox relay · in the Claims API</div>
+<pre class="code"><span class="cm">// Spring runs this every second.</span>
+@Scheduled(fixedDelay = 1000)
+void relay() {
+  for (OutboxRow row : outbox.claimNew(100)) {
+    try {
+      client.newUntypedWorkflowStub(row.workflowType(),
+          WorkflowOptions.newBuilder()
+            .setWorkflowId("event-" + row.id())
+            .setTaskQueue("claims").build())
+        .start(row.payload());
+    } catch (WorkflowExecutionAlreadyStarted e) {
+      <span class="cm">// started before we could mark it: fine</span>
+    }
+    outbox.markStarted(row.id());
+  }
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Why not let Temporal wait 30 days itself?</h2>
+      <p class="note">It could. Temporal has durable timers, and this would be a valid design. We chose not to, and here's the difference.</p>
+    </div>
+    <div class="codepair">
+      <div class="codecard">
+        <div class="eyebrow">Not chosen · one workflow per claim, alive for months</div>
+<pre class="code"><span class="cm">// inside a workflow that lives until the claim closes</span>
+Workflow.sleep(Duration.ofDays(30)); <span class="cm">// Temporal's timer</span>
+<span class="ac">act.sendStatusLetter</span>(claimId);</pre>
+        <ul class="note" style="margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14.5px">
+          <li>Temporal would fire the letter itself on day 30.</li>
+          <li>The deadline would be invisible to SQL. Examiners and compliance couldn't list it, report on it or extend it without sending a message to the workflow.</li>
+          <li>Changing 30 days to 45 for claims already running would mean changing code under workflows that have been waiting for weeks.</li>
+        </ul>
+      </div>
+      <div class="codecard">
+        <div class="eyebrow">Chosen · a row, plus a dispatcher every minute</div>
+<pre class="code">INSERT INTO deadline (id, claim_id, kind, due_at, status)
+VALUES ('D-311', 'C-1042', 'status_letter',
+        '2026-10-26 09:00', 'open');</pre>
+        <ul class="note" style="margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14.5px">
+          <li>Anyone can see, report on and extend the deadline. An extension is an <code>UPDATE</code> with a reason.</li>
+          <li>Each firing runs today's code, and runs are short, so changes are safe.</li>
+          <li>The costs: one query a minute, letters up to a minute after their due time, and every state change has to remember to write its rows. That's failure 1, with a nightly check behind it.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>So what does Temporal give us, if our code does the starting?</h2>
+      <p class="note">Our code decides <em>when</em> work starts. Temporal makes sure that work, once started, <em>finishes</em>: in order, exactly once, through crashes and outages, with a record of every step.</p>
+    </div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>What we need</th><th>Without Temporal, we build it</th><th>With Temporal</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">Finish a multi-step job even if a server dies halfway</td><td class="dim">A jobs table with a "last step done" column, and code in every job to resume from that step</td><td>The event history. Our code stays a plain list of steps.</td></tr>
+          <tr><td class="strong">Retry a failing outside call, with growing waits and a give-up time</td><td class="dim">A retry scheduler, attempt counters and backoff logic</td><td>A setting on each activity</td></tr>
+          <tr><td class="strong">Never run the same job twice</td><td class="dim">Locks and unique keys in every job runner</td><td>Workflow IDs: a second start is refused</td></tr>
+          <tr><td class="strong">Stop waiting for a call that hangs</td><td class="dim">Timeouts wrapped around every call</td><td>A timeout setting on each activity</td></tr>
+          <tr><td class="strong">Find a failed job, see why, and re-run it</td><td class="dim">Our own admin screen, logs and re-run tooling</td><td>The Temporal web UI: search by claim ID, see each step's input, output and error, retry or reset</td></tr>
+          <tr><td class="strong">A recurring job that never overlaps itself</td><td class="dim">A cron job plus a lock</td><td>A Schedule, with an overlap rule, pause and resume</td></tr>
+          <tr><td class="strong">Run all of that in production</td><td class="dim">Our team operates it</td><td>The platform team already does</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Where it matters in Sam's claim</h3>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Run</th><th>Touches outside Postgres</th><th>What Temporal adds</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">1 · intake checks</td><td class="dim">policy admin, sanctions list, letters vendor</td><td><strong>A lot.</strong> Five steps across three outside systems. A crash halfway must not skip the screening or send the acknowledgement twice.</td></tr>
+          <tr><td class="strong">7 · decision</td><td class="dim">letters vendor, policy admin</td><td><strong>A lot.</strong> The approval letter and the premium waiver must both happen, even if policy admin is down for an hour.</td></tr>
+          <tr><td class="strong">5 · status letter</td><td class="dim">letters vendor</td><td><strong>Some.</strong> One outside call with a legal deadline, retried until it goes and alerted on if it can't.</td></tr>
+          <tr><td class="strong">2, 3 · documents</td><td class="dim">none in this example; in practice a virus scan and document classification</td><td><strong>Some</strong>, once those outside calls are added.</td></tr>
+          <tr><td class="strong">4, 6 · proof complete, review done</td><td class="dim">none: Postgres only</td><td><strong>Little.</strong> This work could run inside the API's own transaction, with no workflow at all.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note"><strong>A rule of thumb for the team:</strong> use a workflow when a job calls something outside Postgres, or has several steps that must all happen. If the job only writes Postgres, do it in the same transaction as the event that caused it. Applied to Sam's claim, runs 4 and 6 would stop being workflows, leaving five runs, and each of those five does something Temporal is good at.</p>
+  </section>
+
+  <section>
+    <div class="head"><h2>Who does what</h2></div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Piece</th><th>Whose</th><th>Runs where</th><th>What starts it</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">Claims API</td><td>ours</td><td class="dim">Java service</td><td class="dim">a person, through a screen</td><td>Saves what happened, plus an outbox row, in one transaction</td></tr>
+          <tr><td class="strong">Outbox relay</td><td>ours</td><td class="dim">a loop inside the Claims API</td><td class="dim">its own timer, every second</td><td>Turns new outbox rows into "start workflow" calls</td></tr>
+          <tr><td class="strong">Schedule "deadline-dispatcher"</td><td>Temporal feature, set up by us once</td><td class="dim">Temporal Service</td><td class="dim">Temporal's clock, every minute</td><td>Starts one dispatcher run. The only thing Temporal starts by itself</td></tr>
+          <tr><td class="strong">Dispatcher workflow</td><td>ours</td><td class="dim">claims worker</td><td class="dim">the Schedule</td><td>Finds due deadline rows and starts one workflow per row</td></tr>
+          <tr><td class="strong">Deadline workflows</td><td>ours</td><td class="dim">claims worker</td><td class="dim">the dispatcher</td><td>Do one deadline's work, such as a status letter, and write the next row</td></tr>
+          <tr><td class="strong">Event workflows</td><td>ours</td><td class="dim">claims worker</td><td class="dim">the outbox relay</td><td>React to what someone did: an upload, a decision, a review</td></tr>
+          <tr><td class="strong">Temporal Service</td><td>platform team</td><td class="dim">their servers</td><td class="dim">—</td><td>Records every run's history, holds the task queue, fires the Schedule</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Profile for Spring tests: no real Temporal, nothing polling in the background. Tests drive the
+# dispatcher and the outbox relay by hand so every step is deterministic.
+claims:
+  temporal:
+    enabled: false
+  outbox:
+    poll-enabled: false
+  dispatcher:
+    schedule-enabled: false
+    local-poll-enabled: false
+spring:
+  main:
+    banner-mode: off

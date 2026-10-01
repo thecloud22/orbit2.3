@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Continuation Break Points</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;500;700&display=swap">
+<style>
+  :root {
+    --paper: #F4F6F9;
+    --surface: #FFFFFF;
+    --ink: #172031;
+    --ink-2: #3A4558;
+    --muted: #5A6476;
+    --rule: #CDD4DE;
+    --cobalt: #1F4E8C;
+    --cobalt-tint: #E7EEF8;
+    --risk: #B42318;
+    --sans: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper: #0F141C;
+      --surface: #171E29;
+      --ink: #E4E9F1;
+      --ink-2: #B7C1D0;
+      --muted: #939EB0;
+      --rule: #334052;
+      --cobalt: #8DB3E9;
+      --cobalt-tint: #1A2A42;
+      --risk: #F2877D;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #0F141C;
+    --surface: #171E29;
+    --ink: #E4E9F1;
+    --ink-2: #B7C1D0;
+    --muted: #939EB0;
+    --rule: #334052;
+    --cobalt: #8DB3E9;
+    --cobalt-tint: #1A2A42;
+    --risk: #F2877D;
+  }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    padding-inline: 16px;
+    padding-block: 40px 64px;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; display: grid; gap: 48px; }
+  header { display: grid; gap: 10px; max-width: 72ch; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; font-weight: 700; text-wrap: balance; }
+  h2 { margin: 0; font-size: 20px; line-height: 1.3; font-weight: 700; text-wrap: balance; }
+  p { margin: 0; }
+  .lede { color: var(--ink-2); }
+
+  section { display: grid; gap: 16px; }
+  figure { margin: 0; display: grid; gap: 14px; }
+  .canvas { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; overflow-x: auto; }
+  .canvas svg { display: block; width: 100%; height: auto; }
+  .canvas svg.wide { min-width: 1100px; }
+  .canvas svg.states { min-width: 900px; }
+  figcaption { color: var(--ink-2); max-width: 78ch; font-size: 15px; }
+
+  /* diagram marks */
+  .d text { font-family: var(--sans); fill: var(--ink); }
+  .d .t { font-size: 13.5px; font-weight: 600; }
+  .d .s { font-size: 11.5px; fill: var(--muted); }
+  .d .lbl { font-size: 11.5px; fill: var(--ink-2); }
+  .d .lbl.c { fill: var(--cobalt); }
+  .d .band { fill: var(--cobalt-tint); }
+  .d .laneline { stroke: var(--rule); stroke-width: 1; }
+  .d .box { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.25; }
+  .d .box.dash { stroke-dasharray: 5 4; }
+  .d .box.tmp { fill: var(--surface); stroke: var(--cobalt); stroke-width: 1.6; }
+  .d .box.key { fill: var(--cobalt-tint); stroke: var(--ink); stroke-width: 2; }
+  .d .chip { fill: var(--cobalt-tint); stroke: var(--cobalt); stroke-width: 1.25; }
+  .d .chiptext { font-size: 11.5px; fill: var(--cobalt); font-weight: 600; }
+  .d .ln { fill: none; stroke: var(--ink-2); stroke-width: 1.5; }
+  .d .ln.c { stroke: var(--cobalt); }
+  .d .ln.dash { stroke-dasharray: 5 4; }
+  .d .m-ink { fill: var(--ink-2); }
+  .d .m-cob { fill: var(--cobalt); }
+  .d .mk text { font-family: var(--mono); font-size: 11px; font-weight: 700; }
+  .d .mk.hi circle { fill: var(--risk); stroke: var(--surface); stroke-width: 2; }
+  .d .mk.hi text { fill: var(--surface); }
+  .d .mk.lo circle { fill: var(--surface); stroke: var(--risk); stroke-width: 2; }
+  .d .mk.lo text { fill: var(--risk); }
+
+  /* key table */
+  .tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 14.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--rule); }
+  tr:last-child td { border-bottom: 0; }
+  th { font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  td:first-child { width: 44px; }
+  td:nth-child(2) { width: 170px; font-weight: 600; }
+  td:nth-child(3) { color: var(--ink-2); }
+  .badge {
+    display: inline-grid; place-items: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    border: 2px solid var(--risk);
+  }
+  .badge.hi { background: var(--risk); color: var(--surface); }
+  .badge.lo { background: var(--surface); color: var(--risk); }
+
+  .inv { list-style: none; margin: 0; padding: 0; display: grid; max-width: 900px; border-top: 1px solid var(--rule); }
+  .inv li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 24px; padding-block: 12px; border-bottom: 1px solid var(--rule); }
+  .inv .catches { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+  .inv .badge { width: 22px; height: 22px; font-size: 11px; }
+  .note { color: var(--ink-2); max-width: 78ch; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Claims platform · disability continuation</div>
+    <h1>Continuation Break Points</h1>
+    <p class="lede">The proposed split: Temporal runs a claim from intake to approval, one continuation workflow per disability claim clears each month's payment, and a daily batch run pays what's cleared. The red numbers mark every place this can break.</p>
+  </header>
+
+  <section>
+    <h2>Where it can break</h2>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1240 700" role="img" aria-label="Continuation for one disability claim, with eleven break points. A continuation workflow, one per claim, opens a period by creating a payment item, requests proof from the claimant, waits, calculates and clears or holds the item. The claimant sends proof through the Claims API, which attaches the document in Postgres and signals the workflow. Examiners and claim closure change items through the API. A daily payment run takes cleared items and sends a file to the bank; returns put a hold on the payment method. A conversion loads in-flight claims at go-live, and nightly invariant checks watch items, workflows and holds.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="ahc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <!-- lanes -->
+          <rect class="band" x="8" y="196" width="1224" height="140"/>
+          <line class="laneline" x1="8" y1="20" x2="1232" y2="20"/>
+          <line class="laneline" x1="8" y1="106" x2="1232" y2="106"/>
+          <line class="laneline" x1="8" y1="196" x2="1232" y2="196"/>
+          <line class="laneline" x1="8" y1="336" x2="1232" y2="336"/>
+          <line class="laneline" x1="8" y1="446" x2="1232" y2="446"/>
+          <line class="laneline" x1="8" y1="546" x2="1232" y2="546"/>
+          <line class="laneline" x1="8" y1="626" x2="1232" y2="626"/>
+          <line class="laneline" x1="172" y1="20" x2="172" y2="626"/>
+
+          <text class="t" x="20" y="58">People</text>
+          <text class="s" x="20" y="75">claimant · examiner</text>
+          <text class="t" x="20" y="146">Claims API</text>
+          <text class="s" x="20" y="163">every human action</text>
+          <text class="t" x="20" y="262">Temporal</text>
+          <text class="s" x="20" y="279">continuation</text>
+          <text class="t" x="20" y="386">Postgres</text>
+          <text class="s" x="20" y="403">system of record</text>
+          <text class="t" x="20" y="492">Batch</text>
+          <text class="s" x="20" y="509">scheduled jobs</text>
+          <text class="t" x="20" y="584">External</text>
+
+          <!-- People -->
+          <rect class="box" x="310" y="38" width="120" height="50" rx="4"/>
+          <text class="t" x="370" y="60" text-anchor="middle">Claimant</text>
+          <text class="s" x="370" y="77" text-anchor="middle">or agent</text>
+          <rect class="box" x="1100" y="38" width="120" height="50" rx="4"/>
+          <text class="t" x="1160" y="60" text-anchor="middle">Examiner</text>
+          <text class="s" x="1160" y="77" text-anchor="middle">reviews, holds</text>
+
+          <!-- Claims API -->
+          <rect class="box" x="940" y="128" width="140" height="46" rx="4"/>
+          <text class="t" x="1010" y="156" text-anchor="middle">Claims API</text>
+
+          <!-- continuation workflow -->
+          <rect class="box tmp" x="186" y="214" width="604" height="104" rx="6"/>
+          <rect class="chip" x="202" y="230" width="100" height="28" rx="4"/><text class="chiptext" x="252" y="248" text-anchor="middle">open period</text>
+          <rect class="chip" x="320" y="230" width="100" height="28" rx="4"/><text class="chiptext" x="370" y="248" text-anchor="middle">request proof</text>
+          <rect class="chip" x="438" y="230" width="100" height="28" rx="4"/><text class="chiptext" x="488" y="248" text-anchor="middle">wait for proof</text>
+          <rect class="chip" x="556" y="230" width="100" height="28" rx="4"/><text class="chiptext" x="606" y="248" text-anchor="middle">calculate</text>
+          <rect class="chip" x="674" y="230" width="100" height="28" rx="4"/><text class="chiptext" x="724" y="248" text-anchor="middle">clear or hold</text>
+          <line class="ln c" x1="302" y1="244" x2="319" y2="244" marker-end="url(#ahc)"/>
+          <line class="ln c" x1="420" y1="244" x2="437" y2="244" marker-end="url(#ahc)"/>
+          <line class="ln c" x1="538" y1="244" x2="555" y2="244" marker-end="url(#ahc)"/>
+          <line class="ln c" x1="656" y1="244" x2="673" y2="244" marker-end="url(#ahc)"/>
+          <text class="t" x="488" y="288" text-anchor="middle">Continuation workflow · one per claim</text>
+          <text class="s" x="488" y="306" text-anchor="middle">continue-as-new starts the next cycle</text>
+
+          <!-- Postgres -->
+          <rect class="box key" x="186" y="362" width="814" height="62" rx="4"/>
+          <text class="t" x="300" y="388">Payment items · the contract</text>
+          <text class="s" x="300" y="409">awaiting proof → cleared → in run → paid · also held, cancelled, adjustments</text>
+          <rect class="box" x="1014" y="362" width="86" height="62" rx="4"/>
+          <text class="t" x="1057" y="388" text-anchor="middle">documents</text>
+          <text class="s" x="1057" y="406" text-anchor="middle">by claim</text>
+          <rect class="box" x="1114" y="362" width="90" height="62" rx="4"/>
+          <text class="t" x="1159" y="388" text-anchor="middle">holds</text>
+          <text class="s" x="1159" y="406" text-anchor="middle">item, payee</text>
+
+          <!-- Batch -->
+          <rect class="box dash" x="186" y="466" width="130" height="50" rx="4"/>
+          <text class="t" x="251" y="488" text-anchor="middle">Conversion</text>
+          <text class="s" x="251" y="505" text-anchor="middle">go-live, once</text>
+          <rect class="box dash" x="344" y="466" width="216" height="50" rx="4"/>
+          <text class="t" x="452" y="488" text-anchor="middle">Nightly invariant checks</text>
+          <text class="s" x="452" y="505" text-anchor="middle">items · workflows · holds</text>
+          <rect class="box" x="760" y="466" width="160" height="50" rx="4"/>
+          <text class="t" x="840" y="488" text-anchor="middle">Payment run</text>
+          <text class="s" x="840" y="505" text-anchor="middle">daily</text>
+          <rect class="box" x="1040" y="466" width="140" height="50" rx="4"/>
+          <text class="t" x="1110" y="488" text-anchor="middle">Returns</text>
+          <text class="s" x="1110" y="505" text-anchor="middle">daily</text>
+
+          <!-- External -->
+          <rect class="box" x="760" y="566" width="160" height="40" rx="4"/>
+          <text class="t" x="840" y="591" text-anchor="middle">Bank</text>
+
+          <!-- edges: people and API -->
+          <path class="ln" d="M430,55 H1010 V127" marker-end="url(#ah)"/>
+          <text class="lbl" x="720" y="47" text-anchor="middle">sends proof: portal, mail, fax</text>
+          <path class="ln" d="M1100,63 H1060 V127" marker-end="url(#ah)"/>
+          <line class="ln c" x1="370" y1="230" x2="370" y2="89" marker-end="url(#ahc)"/>
+          <text class="lbl c" x="390" y="180">requests, reminders</text>
+          <path class="ln c" d="M940,151 H488 V229" marker-end="url(#ahc)"/>
+          <text class="lbl c" x="713" y="143" text-anchor="middle">signal: proof received</text>
+
+          <!-- edges: into Postgres -->
+          <line class="ln" x1="1057" y1="174" x2="1057" y2="361" marker-end="url(#ah)"/>
+          <text class="lbl" x="1066" y="262">attach first</text>
+          <line class="ln" x1="980" y1="174" x2="980" y2="361" marker-end="url(#ah)"/>
+          <text class="lbl" x="970" y="252" text-anchor="end">examiner: clear or hold</text>
+          <text class="lbl" x="970" y="267" text-anchor="end">close: cancel open items</text>
+          <line class="ln c" x1="252" y1="258" x2="252" y2="361" marker-end="url(#ahc)"/>
+          <text class="lbl c" x="272" y="353">creates this period's item</text>
+          <line class="ln c" x1="724" y1="258" x2="724" y2="361" marker-end="url(#ahc)"/>
+          <text class="lbl c" x="742" y="353">clears or holds (checks status)</text>
+
+          <!-- edges: batch and bank -->
+          <line class="ln" x1="840" y1="466" x2="840" y2="425" marker-end="url(#ah)"/>
+          <text class="lbl" x="858" y="459">takes cleared items</text>
+          <line class="ln" x1="840" y1="516" x2="840" y2="565" marker-end="url(#ah)"/>
+          <text class="lbl" x="850" y="544">file, sent once</text>
+          <path class="ln" d="M920,586 H1110 V517" marker-end="url(#ah)"/>
+          <text class="lbl" x="1015" y="578" text-anchor="middle">returns file</text>
+          <line class="ln" x1="1150" y1="466" x2="1150" y2="425" marker-end="url(#ah)"/>
+          <text class="lbl" x="1136" y="459" text-anchor="end">hold payment method</text>
+          <line class="ln dash" x1="220" y1="466" x2="220" y2="425" marker-end="url(#ah)"/>
+          <line class="ln dash" x1="452" y1="466" x2="452" y2="425" marker-end="url(#ah)"/>
+
+          <!-- break point markers -->
+          <g class="mk hi"><circle cx="252" cy="336" r="11"/><text x="252" y="340" text-anchor="middle">1</text></g>
+          <g class="mk hi"><circle cx="790" cy="214" r="11"/><text x="790" y="218" text-anchor="middle">2</text></g>
+          <g class="mk lo"><circle cx="370" cy="176" r="11"/><text x="370" y="180" text-anchor="middle">3</text></g>
+          <g class="mk hi"><circle cx="560" cy="151" r="11"/><text x="560" y="155" text-anchor="middle">4</text></g>
+          <g class="mk hi"><circle cx="656" cy="230" r="11"/><text x="656" y="234" text-anchor="middle">5</text></g>
+          <g class="mk hi"><circle cx="724" cy="336" r="11"/><text x="724" y="340" text-anchor="middle">6</text></g>
+          <g class="mk hi"><circle cx="1220" cy="38" r="11"/><text x="1220" y="42" text-anchor="middle">7</text></g>
+          <g class="mk hi"><circle cx="980" cy="300" r="11"/><text x="980" y="304" text-anchor="middle">8</text></g>
+          <g class="mk lo"><circle cx="840" cy="446" r="11"/><text x="840" y="450" text-anchor="middle">9</text></g>
+          <g class="mk lo"><circle cx="1150" cy="446" r="11"/><text x="1150" y="450" text-anchor="middle">10</text></g>
+          <g class="mk hi"><circle cx="186" cy="466" r="11"/><text x="186" y="470" text-anchor="middle">11</text></g>
+
+          <!-- legend -->
+          <g class="mk hi"><circle cx="196" cy="664" r="11"/><text x="196" y="668" text-anchor="middle">1</text></g>
+          <text class="lbl" x="214" y="668">silent or costly: missed payment, overpayment, regulatory breach</text>
+          <g class="mk lo"><circle cx="646" cy="664" r="11"/><text x="646" y="668" text-anchor="middle">3</text></g>
+          <text class="lbl" x="664" y="668">noisy, caught quickly</text>
+          <line class="ln c" x1="830" y1="664" x2="870" y2="664" marker-end="url(#ahc)"/>
+          <text class="lbl" x="880" y="668">Temporal</text>
+          <line class="ln dash" x1="960" y1="664" x2="1000" y2="664" marker-end="url(#ah)"/>
+          <text class="lbl" x="1010" y="668">one-off load or check</text>
+        </svg>
+      </div>
+      <figcaption>Every arrow into Postgres changes a payment item, and most break points sit on those arrows. The payment run and the bank never talk to Temporal. If Temporal is down, cleared items still get paid; only new clearing waits. Drawing this moved one piece: the continuation workflow now opens each period itself. A separate batch job opening periods would race with the workflow's own cycle.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>What breaks at each point</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>#</th><th>Where</th><th>What breaks</th><th>Guard</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge hi">1</span></td><td>Opening a period</td><td>A wrong schedule end date means no item, so the claimant is silently unpaid. Or a retry opens the period twice and sends two proof letters.</td><td>Unique key on benefit line + period. Nightly check: one item for every period that's due.</td></tr>
+          <tr><td><span class="badge hi">2</span></td><td>Continuation workflow</td><td>The workflow fails or is terminated, and nothing starts the next cycle.</td><td>Nightly check: every claim in continuation has a running workflow. Alert on any failed workflow.</td></tr>
+          <tr><td><span class="badge lo">3</span></td><td>Requests and reminders</td><td>Workers are down for two days, then every timer fires at once and sends reminders for proof that already arrived. Or a suspension goes through but its letter fails.</td><td>Timers use absolute dates. The workflow re-reads Postgres before any letter. The letter goes out before the status changes.</td></tr>
+          <tr><td><span class="badge hi">4</span></td><td>Proof arriving</td><td>Proof is late, early, covers several months or several policies, or arrives on paper a week later. A signal to a finished workflow fails and the document sits unattached.</td><td>Attach to the claim in Postgres first, recording which periods and benefit lines it covers, then signal. No running workflow means an examiner task.</td></tr>
+          <tr><td><span class="badge hi">5</span></td><td>Calculating</td><td>The wrong rules version is used. The claimant switches between residual and total disability. Tax-return true-ups, partial months and appeals change periods already paid.</td><td>Rules version pinned on the benefit line and stored with each calculation. Paid items are never edited; corrections are new adjustment items.</td></tr>
+          <tr><td><span class="badge hi">6</span></td><td>Clearing or holding</td><td>The workflow and an examiner change the same item at the same moment. Whichever write lands last wins.</td><td>One state machine for item status, which checks the current status before any change. Human decisions win over automatic ones.</td></tr>
+          <tr><td><span class="badge hi">7</span></td><td>Examiner</td><td>A forgotten hold means silent non-payment. A review task for every proof creates a backlog, and payments go out late.</td><td>Every hold has an owner and a review date. Clear automatically when proof is unchanged.</td></tr>
+          <tr><td><span class="badge hi">8</span></td><td>Claim closing</td><td>Recovery, death or the end of the benefit period arrives while items are open or already in a bank file, causing an overpayment.</td><td>Closing cancels open items in the same transaction. The payment run re-checks claim status. A stop after the file has gone becomes a recovery task.</td></tr>
+          <tr><td><span class="badge lo">9</span></td><td>Payment run and bank</td><td>Two runs take the same item. The file is sent twice or not at all. The run doesn't happen.</td><td>Items taken in one step, stamped with the run ID. File IDs and bank acknowledgement. An alert from outside the batch if the run is late.</td></tr>
+          <tr><td><span class="badge lo">10</span></td><td>Returns</td><td>A payment is returned, and next month pays the same closed account.</td><td>The hold goes on the payee's payment method, not the item.</td></tr>
+          <tr><td><span class="badge hi">11</span></td><td>Go-live conversion</td><td>In-flight claims are loaded with the wrong item statuses, or without a running workflow.</td><td>Rehearse the conversion. Run the nightly checks on converted data before cutover.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>The payment item: who can change it</h2>
+    <figure>
+      <div class="canvas">
+        <svg class="d states" viewBox="0 0 1060 340" role="img" aria-label="Payment item state machine. The workflow moves an item from awaiting proof to cleared, or to held when proof is overdue. Examiners or a sanctions hit move a cleared item to held, and examiners release it back to cleared. The payment run moves cleared items to in run, and the bank acknowledgement moves them to paid. A returns file moves a paid item to returned. A later correction creates a new adjustment item. Closing the claim moves awaiting, cleared or held items to cancelled.">
+          <defs>
+            <marker id="sh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="shc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <!-- states -->
+          <rect class="box" x="40" y="150" width="130" height="40" rx="20"/>
+          <text class="t" x="105" y="175" text-anchor="middle">awaiting proof</text>
+          <rect class="box" x="330" y="150" width="130" height="40" rx="20"/>
+          <text class="t" x="395" y="175" text-anchor="middle">cleared</text>
+          <rect class="box" x="620" y="150" width="130" height="40" rx="20"/>
+          <text class="t" x="685" y="175" text-anchor="middle">in run</text>
+          <rect class="box key" x="880" y="150" width="130" height="40" rx="20"/>
+          <text class="t" x="945" y="175" text-anchor="middle">paid</text>
+          <rect class="box" x="330" y="40" width="130" height="40" rx="20"/>
+          <text class="t" x="395" y="65" text-anchor="middle">held</text>
+          <rect class="box" x="40" y="270" width="130" height="44" rx="22"/>
+          <text class="t" x="105" y="289" text-anchor="middle">cancelled</text>
+          <text class="s" x="105" y="305" text-anchor="middle">also from held</text>
+          <rect class="box" x="880" y="270" width="130" height="44" rx="22"/>
+          <text class="t" x="945" y="289" text-anchor="middle">returned</text>
+          <text class="s" x="945" y="305" text-anchor="middle">hold payee, reissue</text>
+          <rect class="box dash" x="880" y="40" width="130" height="44" rx="4"/>
+          <text class="t" x="945" y="59" text-anchor="middle">adjustment item</text>
+          <text class="s" x="945" y="75" text-anchor="middle">new row, + or −</text>
+
+          <!-- transitions -->
+          <line class="ln c" x1="170" y1="170" x2="329" y2="170" marker-end="url(#shc)"/>
+          <text class="lbl c" x="250" y="162" text-anchor="middle">workflow: proof accepted</text>
+          <path class="ln c" d="M130,150 V60 H329" marker-end="url(#shc)"/>
+          <text class="lbl c" x="232" y="52" text-anchor="middle">workflow: proof overdue</text>
+          <line class="ln" x1="380" y1="150" x2="380" y2="81" marker-end="url(#sh)"/>
+          <text class="lbl" x="370" y="119" text-anchor="end">examiner or sanctions hit</text>
+          <line class="ln" x1="410" y1="80" x2="410" y2="149" marker-end="url(#sh)"/>
+          <text class="lbl" x="420" y="119">examiner releases</text>
+          <line class="ln" x1="460" y1="170" x2="619" y2="170" marker-end="url(#sh)"/>
+          <text class="lbl" x="540" y="162" text-anchor="middle">payment run takes it</text>
+          <line class="ln" x1="750" y1="170" x2="879" y2="170" marker-end="url(#sh)"/>
+          <text class="lbl" x="815" y="162" text-anchor="middle">bank acknowledges</text>
+          <text class="s" x="685" y="214" text-anchor="middle">only the payment run changes it;</text>
+          <text class="s" x="685" y="229" text-anchor="middle">a late hold becomes a recovery task</text>
+          <line class="ln" x1="945" y1="190" x2="945" y2="269" marker-end="url(#sh)"/>
+          <text class="lbl" x="963" y="234">returns file</text>
+          <line class="ln dash" x1="945" y1="150" x2="945" y2="85" marker-end="url(#sh)"/>
+          <text class="lbl" x="955" y="122">correction later</text>
+          <line class="ln" x1="105" y1="190" x2="105" y2="269" marker-end="url(#sh)"/>
+          <text class="lbl" x="88" y="234" text-anchor="end">claim closes</text>
+          <path class="ln" d="M360,190 V292 H171" marker-end="url(#sh)"/>
+          <text class="lbl" x="265" y="283" text-anchor="middle">claim closes</text>
+
+          <!-- markers tying back to the break points -->
+          <g class="mk hi"><circle cx="395" cy="115" r="11"/><text x="395" y="119" text-anchor="middle">6</text></g>
+          <g class="mk hi"><circle cx="105" cy="230" r="11"/><text x="105" y="234" text-anchor="middle">8</text></g>
+          <g class="mk lo"><circle cx="750" cy="150" r="11"/><text x="750" y="154" text-anchor="middle">9</text></g>
+          <g class="mk lo"><circle cx="945" cy="230" r="11"/><text x="945" y="234" text-anchor="middle">10</text></g>
+          <g class="mk hi"><circle cx="1010" cy="40" r="11"/><text x="1010" y="44" text-anchor="middle">5</text></g>
+        </svg>
+      </div>
+      <figcaption>Every change to an item goes through this one state machine, which checks the current status before allowing a transition. Blue transitions are made by the workflow, and every other writer is named on its arrow. Two rules carry most of the safety: nothing but the payment run touches an item that's in a run, and nothing edits a paid item. Corrections are new rows.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Checked every night</h2>
+    <p class="note">These checks don't prevent a break. They make sure one shows up within a day instead of in a complaint to the Department of Insurance.</p>
+    <ul class="inv">
+      <li><span>Every active benefit line has exactly one item for each period that's due.</span><span class="catches">catches <span class="badge hi">1</span><span class="badge hi">2</span><span class="badge hi">11</span></span></li>
+      <li><span>Every claim in continuation has a running continuation workflow.</span><span class="catches">catches <span class="badge hi">2</span><span class="badge hi">11</span></span></li>
+      <li><span>No document is left unmatched to a period, and no proof sits unreviewed past its limit.</span><span class="catches">catches <span class="badge hi">4</span><span class="badge hi">7</span></span></li>
+      <li><span>No item is paid for a period after the claim's end date or date of death.</span><span class="catches">catches <span class="badge hi">8</span></span></li>
+      <li><span>Every suspension has a letter; every hold has an owner and a review date that hasn't passed.</span><span class="catches">catches <span class="badge lo">3</span><span class="badge hi">7</span></span></li>
+      <li><span>No item stays cleared for more than a set number of days without being paid, and paid items match bank confirmations to the cent.</span><span class="catches">catches <span class="badge lo">9</span></span></li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>

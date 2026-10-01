@@ -1,0 +1,53 @@
+/* Live Decision and Payments screens (the real backend). Prefixed lv-. */
+.lv { display: flex; flex-direction: column; gap: 16px; }
+.lv-error { padding: 8px 12px; border: 1px solid var(--critical-line, #E3B7B1); background: var(--critical-bg, #FDF3F1); color: var(--critical-ink); border-radius: var(--radius); font-size: 13px; line-height: 1.4; }
+.lv-blocked { margin-top: 4px; }
+.lv-blocked .sub { margin-top: 4px; }
+.lv-off { opacity: .55; cursor: not-allowed; }
+.lv-records { display: flex; flex-direction: column; gap: 10px; }
+.lv-lead { line-height: 1.5; margin: 0; max-width: 78ch; }
+.lv-dl { grid-template-columns: 150px minmax(0, 1fr); }
+.lv-approval { border-color: var(--accent-line); }
+.lv-decided { align-items: center; }
+.lv-note { margin: 0; color: var(--ink-3); font-size: 12.5px; line-height: 1.45; }
+
+/* Payments */
+.lv-pay .pm-tiles { margin-top: 4px; }
+.lv-pay-table td, .lv-pay-table th { white-space: nowrap; }
+.lv-pay-table td.lv-wrap { white-space: normal; min-width: 170px; }
+.lv-pay-table td.lv-wrap .sub { white-space: normal; }
+.lv-pay-table tr:target { outline: 2px solid var(--accent); outline-offset: -2px; }
+.lv-pay-table tr.lv-flash { outline: 2px solid var(--accent); outline-offset: -2px; }
+.lv-hold-row td { background: var(--sunken); white-space: normal; }
+.lv-hold-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lv-hold-label { font-size: 12.5px; font-weight: 600; }
+.lv-hold-form .input { height: 28px; flex: 1 1 220px; min-width: 0; }
+.lv-run { border: 1px solid var(--accent-line); background: var(--info-bg); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.lv-run-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lv-run-head h3 { font-size: 14px; }
+.lv-run-tag { font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent-line); border-radius: 3px; padding: 0 5px; }
+.lv-run-body { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.lv-run-body p { margin: 0; flex: 1 1 320px; line-height: 1.5; }
+.lv-run-result { padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); font-size: 13px; line-height: 1.5; }
+.lv-runs { font-size: 12.5px; }
+
+/* Work items on the claim */
+.lv-work { display: flex; flex-direction: column; gap: 6px; }
+.lv-work-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.lv-work-row .strong { font-weight: 600; }
+
+.lv-link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+.lv-ref { overflow-wrap: anywhere; max-width: 210px; }
+.lv-pay-table td.lv-wrap { min-width: 150px; max-width: 230px; }
+
+/* Documents (live) */
+.lv-docnote { align-items: flex-start; }
+.lv-scroll { overflow-x: auto; min-width: 0; }
+.lv-docs td, .lv-docs th { vertical-align: top; }
+.lv-doc-review td { background: var(--info-bg); }
+.lv-runline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.lv-red { color: var(--critical-ink); font-weight: 600; }
+.lv-after { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.5; }
+.lv-flash { outline: 2px solid var(--accent); outline-offset: -2px; }
+.lv-docs .lv-ref { max-width: 240px; }
+.lv-docs td.mono { white-space: nowrap; }

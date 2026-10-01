@@ -1,0 +1,86 @@
+/* Medical — clinical file for DI claims. Minimum necessary access. */
+.md { container-type: inline-size; display: flex; flex-direction: column; gap: 18px; }
+.md-access { display: flex; align-items: flex-start; gap: 8px; padding: 7px 12px; background: var(--sunken); border-radius: var(--radius); font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+.md-access svg { margin-top: 2px; }
+.md-text { max-width: 900px; line-height: 1.5; font-size: 12.5px; }
+.md-h4 { font-size: 13px; font-weight: 700; }
+.md-scroll { overflow-x: auto; }
+
+/* ---------- Referral ---------- */
+.md-referral { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 4px 10px; padding: 10px 14px; background: var(--sunken); border-radius: 6px; }
+.md-referral svg { margin-top: 2px; }
+.md-referral-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+.md-referral blockquote { grid-column: 2; margin: 0; line-height: 1.5; }
+
+/* ---------- Columns ---------- */
+.md-cols { display: flex; flex-direction: column; gap: 20px; }
+.md-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.md-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+@container (min-width: 760px) { .md-pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@container (min-width: 1120px) {
+  .md-cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, 1fr); align-items: start; }
+}
+
+/* ---------- Restrictions ---------- */
+.md-vers { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.md-ver { height: 24px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); font-size: 12px; color: var(--ink-2); }
+.md-ver:hover { border-color: var(--accent-line); color: var(--accent); }
+.md-ver[aria-pressed=true] { border-color: var(--accent); background: var(--accent-tint); color: var(--accent); font-weight: 700; }
+.md-rtable th { white-space: nowrap; }
+.md-cur { font-size: 11px; font-weight: 700; color: var(--positive-ink); background: var(--positive-bg); padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+.md-new { font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-tint); padding: 1px 5px; border-radius: 3px; margin-left: 4px; border: 1px dashed var(--proposed-line); }
+.md-prop-h { background: var(--proposed-bg); }
+.md-prop { background: var(--proposed-bg); font-weight: 600; }
+.md-pending { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px dashed var(--proposed-line); background: var(--proposed-bg); border-radius: var(--radius); font-size: 12px; color: var(--ink-2); }
+.md-pending svg { color: var(--accent); flex-shrink: 0; }
+.md-pending a { font-size: 12px; }
+.md-group td { background: var(--sunken); font-size: 12px; font-weight: 700; color: var(--ink-2); padding: 5px 10px; }
+.md-slot { display: inline-block; padding: 2px 8px; border: 1px dashed var(--line-strong); border-radius: 3px; color: var(--ink-3); font-size: 12px; background: var(--surface); }
+.md-slot--block { display: block; padding: 10px 12px; }
+
+/* ---------- Opinion ---------- */
+.md-opinion { border: 1px solid var(--line-strong); border-radius: 6px; display: flex; flex-direction: column; min-width: 0; }
+.md-opinion--signed { border-color: var(--line); }
+.md-op-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.md-op-head h3 { font-size: 14px; }
+.md-op-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+.md-op-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--sunken); border-radius: 0 0 6px 6px; }
+.md-field { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 4px 12px; align-items: start; }
+.md-field legend { float: left; width: 180px; font-size: 12px; font-weight: 700; color: var(--ink-2); padding-top: 2px; }
+.md-opts { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.md-opt { display: inline-flex; align-items: center; gap: 6px; min-height: 22px; font-size: 13px; cursor: pointer; }
+.md-field-legend { font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.md-two { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 12px; align-items: start; }
+.md-two .md-field { grid-template-columns: minmax(0, 1fr); }
+.md-two .md-field legend { float: none; width: auto; margin-bottom: 4px; }
+.md-contacts { display: flex; flex-direction: column; gap: 6px; }
+.md-contact { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--sunken); border-radius: var(--radius); font-size: 12.5px; }
+.md-contact-add { display: flex; gap: 8px; }
+@container (max-width: 560px) {
+  .md-field, .md-two { grid-template-columns: minmax(0, 1fr); }
+  .md-field legend { float: none; width: auto; }
+}
+
+/* ---------- Lists ---------- */
+.md-dx { border-top: 1px solid var(--line); }
+.md-dx li { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.md-dx .mono { width: 64px; flex-shrink: 0; }
+.md-providers, .md-missing, .md-known { border-top: 1px solid var(--line); }
+.md-providers li, .md-missing li, .md-known li { display: flex; flex-direction: column; gap: 3px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.md-pv-top { display: flex; align-items: center; gap: 10px; }
+.md-known-src { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+.md-link { font-size: 12px; align-self: flex-start; }
+.md-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; }
+
+/* ---------- Timeline ---------- */
+.md-tl { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); position: relative; }
+.md-tl::before { content: ''; position: absolute; left: 4px; right: 4px; top: 4px; height: 1px; background: var(--line-strong); }
+.md-tl li { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 16px 8px 0 0; font-size: 12.5px; }
+.md-tl-dot { position: absolute; left: 0; top: 0; width: 9px; height: 9px; border-radius: 50%; background: var(--ink-2); }
+.md-tl .is-current .md-tl-dot { background: var(--surface); border: 2px solid var(--accent); }
+.md-tl .is-current .strong { color: var(--accent); }
+@container (max-width: 700px) {
+  .md-tl { grid-auto-flow: row; }
+  .md-tl::before { left: 4px; right: auto; top: 4px; bottom: 4px; width: 1px; height: auto; }
+  .md-tl li { padding: 0 0 10px 20px; }
+}

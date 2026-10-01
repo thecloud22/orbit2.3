@@ -1,0 +1,46 @@
+{
+  "aria": "Swimlane of an online order on 3 and 4 March: the customer checks out, the card payment is declined and retried, the customer updates the card, the warehouse ships, and a delivery-failed scan brings a re-delivery.",
+  "lanes": [
+    { "id": "customer", "name": "Customer", "sub": "shopper" },
+    { "id": "app", "name": "Order service", "sub": "order state", "tint": "grey" },
+    { "id": "timers", "name": "Timers", "sub": "scheduled work" },
+    { "id": "jobs", "name": "Workers", "sub": "background jobs", "tint": "blue" },
+    { "id": "partners", "name": "Partners", "sub": "outside systems" }
+  ],
+  "phases": [
+    { "n": "3 Mar", "c": "checkout", "w": 1 },
+    { "n": "3 Mar", "c": "payment declined", "w": 1.4, "tone": "bad" },
+    { "n": "4 Mar", "c": "card fixed", "w": 1.3 },
+    { "n": "5 Mar", "c": "shipped", "w": 1.1 },
+    { "n": "6 Mar", "c": "delivery fails", "w": 1.6, "tone": "bad" },
+    { "n": "7 Mar", "c": "re-delivered", "w": 1.1 }
+  ],
+  "items": [
+    ["customer", 0, 0.5, 0, "chip", "places order", "po"],
+    ["customer", 2, 0.5, 0, "chip", "updates card", "uc"],
+    ["customer", 4, 0.5, 0, "chip", "rebooks slot", "rb"],
+
+    { "k": "track", "lane": "app", "p": 0, "x1": 0.45, "t": "placed" },
+    { "k": "track", "lane": "app", "p": 0, "x0": 0.5, "to": 1, "x1": 0.97, "t": "payment failed", "tone": "bad" },
+    { "k": "track", "lane": "app", "p": 2, "to": 3, "x1": 0.5, "t": "paid, packing" },
+    { "k": "track", "lane": "app", "p": 3, "x0": 0.55, "to": 4, "x1": 0.5, "t": "shipped" },
+    { "k": "track", "lane": "app", "p": 4, "x0": 0.55, "x1": 0.97, "t": "delivery failed", "tone": "bad" },
+    { "k": "track", "lane": "app", "p": 5, "t": "delivered", "tone": "end" },
+    ["app", 1, 0.5, 1, "bad", "card declined"],
+    ["app", 2, 0.5, 1, "chip", "payment captured"],
+
+    ["timers", 1, 0.5, 0, "timer", "retry payment · 1 h", "t1"],
+    ["timers", 2, 0.5, 0, "void", "cancel order · 48 h"],
+
+    ["jobs", 0, 0.5, 0, "run", "charge card", "j0", "po"],
+    ["jobs", 1, 0.5, 0, "runT", "retry charge", "j1", "t1"],
+    ["jobs", 2, 0.5, 0, "run", "capture, release", "j2", "uc"],
+    ["jobs", 4, 0.5, 0, "run", "book re-delivery", "j4", "rb"],
+
+    ["partners", 0, 0.5, 0, "chip", "card network"],
+    ["partners", 1, 0.5, 0, "bad", "issuer: declined"],
+    ["partners", 3, 0.5, 0, "chip", "warehouse ships"],
+    ["partners", 4, 0.5, 0, "bad", "courier: failed scan"],
+    ["partners", 5, 0.5, 0, "chip", "courier delivers"]
+  ]
+}

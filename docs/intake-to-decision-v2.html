@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intake to Decision</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="claims-v2.css">
+<script src="swimlane-v2.js"></script>
+
+</head>
+<body>
+<div class="wrap">
+  <nav class="pagenav" aria-label="Claims backend v2">
+    <span class="ver">V2</span>
+    <a href="temporal-explained-v2.html">Temporal, explained</a>
+    <a href="temporal-layers-v2.html">Layer by layer</a>
+    <a href="with-without-temporal-v2.html">With vs without</a>
+    <a href="backend-architecture-v2.html">Architecture</a>
+    <a href="intake-to-decision-v2.html" aria-current="page">Intake to decision</a>
+    <a href="disability-scenarios-v2.html">Disability scenarios</a>
+    <a href="failure-handling-v2.html">Failure handling</a>
+    <a href="product-change-v2.html">Product changes</a>
+  </nav>
+
+  <header>
+    <div class="eyebrow">Claims platform · individual disability income · v2</div>
+    <h1>Intake to Decision</h1>
+    <p class="lede">Everything between the first notice of a disability claim and the decision: the checks that run at intake, how evidence is requested and chased, which clocks the state rules start, who works on the claim, and how it hands over to monthly benefits.</p>
+    <p class="note">Day counts are labelled examples. Acknowledgement, decision and status-letter limits come from each state's claim-handling rules, and the elimination period comes from the policy.</p>
+  </header>
+
+  <section>
+    <div class="head">
+      <h2>The whole path</h2>
+      <p class="note">Six stages. The claim's status moves along the Claims API lane; every clock sits in the Deadlines lane; Temporal only runs the short steps in between.</p>
+    </div>
+    <figure>
+      <div class="canvas" data-swimlane="path"></div>
+      <figcaption>
+        <span>First notice starts the intake checks. If they pass, a set-up workflow creates the claim and its benefit lines. It picks the list of evidence to request from the product configuration, sends the acknowledgement and claim forms, and writes the first deadlines. Evidence arrives as documents and each one starts a short workflow. A follow-up deadline chases what's missing. When every requirement is accepted or waived, proof of loss is complete: the decision limit starts and review tasks go to the consultants. The examiner decides, and a benefit set-up workflow creates the payment items from the end of the elimination period and hands the claim to the monthly cycle.</span>
+        <span class="breaks">Can break at 21 (wrong policy or duplicate claim), 1 (a deadline never written), 16 (letters vendor down), 5 (proof complete saved but the next step never started), 7 (examiner and workflow change the claim at once), 9 (benefits set up on the wrong version).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>The first minutes: intake checks</h2>
+      <p class="note">One orchestration, started from the outbox when first notice is saved. It either sets the claim up or stops and hands the claim to a person.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 560" role="img" aria-label="Sequence of the intake orchestration: it finds the policy in policy admin and reads its status, riders and issue date; screens the claimant and payee against the sanctions list; checks Postgres for a duplicate claim; creates the claim, benefit lines and requirement set; sends the acknowledgement, claim forms and authorization through the letters vendor; and writes the first deadlines. Five exceptions stop the orchestration and open a task for a person.">
+          <defs>
+            <marker id="ia" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="ic" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <rect class="box" x="15" y="16" width="170" height="48" rx="4"/>
+          <text class="t" x="100" y="37" text-anchor="middle">Claims API</text>
+          <text class="s" x="100" y="54" text-anchor="middle">first notice saved</text>
+          <rect class="box tmp" x="215" y="16" width="170" height="48" rx="4"/>
+          <text class="t" x="300" y="37" text-anchor="middle">Intake checks</text>
+          <text class="s" x="300" y="54" text-anchor="middle">orchestration</text>
+          <rect class="box" x="425" y="16" width="170" height="48" rx="4"/>
+          <text class="t" x="510" y="37" text-anchor="middle">Policy admin</text>
+          <text class="s" x="510" y="54" text-anchor="middle">outside</text>
+          <rect class="box" x="615" y="16" width="170" height="48" rx="4"/>
+          <text class="t" x="700" y="37" text-anchor="middle">Sanctions list</text>
+          <text class="s" x="700" y="54" text-anchor="middle">outside</text>
+          <rect class="box pg" x="815" y="16" width="170" height="48" rx="4"/>
+          <text class="t" x="900" y="37" text-anchor="middle">Postgres</text>
+          <text class="s" x="900" y="54" text-anchor="middle">state + deadlines</text>
+          <rect class="box" x="1015" y="16" width="170" height="48" rx="4"/>
+          <text class="t" x="1100" y="37" text-anchor="middle">Letters vendor</text>
+          <text class="s" x="1100" y="54" text-anchor="middle">outside</text>
+
+          <line class="life" x1="100" y1="64" x2="100" y2="430"/>
+          <line class="life" x1="300" y1="64" x2="300" y2="430"/>
+          <line class="life" x1="510" y1="64" x2="510" y2="430"/>
+          <line class="life" x1="700" y1="64" x2="700" y2="430"/>
+          <line class="life" x1="900" y1="64" x2="900" y2="430"/>
+          <line class="life" x1="1100" y1="64" x2="1100" y2="430"/>
+
+          <line class="ln c" x1="100" y1="100" x2="299" y2="100" marker-end="url(#ic)"/>
+          <text class="lbl c halo" x="200" y="92" text-anchor="middle"><tspan class="num">1</tspan>  start, from the outbox</text>
+          <line class="ln c" x1="300" y1="140" x2="509" y2="140" marker-end="url(#ic)"/>
+          <text class="lbl c halo" x="405" y="132" text-anchor="middle"><tspan class="num">2</tspan>  find the policy</text>
+          <line class="ln dash" x1="510" y1="176" x2="301" y2="176" marker-end="url(#ia)"/>
+          <text class="lbl halo" x="405" y="168" text-anchor="middle">in force? riders? issue date</text>
+          <line class="ln c" x1="300" y1="216" x2="699" y2="216" marker-end="url(#ic)"/>
+          <text class="lbl c halo" x="500" y="208" text-anchor="middle"><tspan class="num">3</tspan>  screen claimant and payee</text>
+          <line class="ln c" x1="300" y1="256" x2="899" y2="256" marker-end="url(#ic)"/>
+          <text class="lbl c halo" x="600" y="248" text-anchor="middle"><tspan class="num">4</tspan>  any open claim for this insured and dates?</text>
+          <line class="ln c" x1="300" y1="310" x2="899" y2="310" marker-end="url(#ic)"/>
+          <text class="lbl c halo" x="600" y="288" text-anchor="middle"><tspan class="num">5</tspan>  create claim, benefit lines, requirement set</text>
+          <text class="s halo" x="600" y="302" text-anchor="middle">requirements picked by product, state, occupation and contestability</text>
+          <line class="ln c" x1="300" y1="356" x2="1099" y2="356" marker-end="url(#ic)"/>
+          <text class="lbl c halo" x="700" y="348" text-anchor="middle"><tspan class="num">6</tspan>  acknowledgement, claim forms, authorization</text>
+          <line class="ln c" x1="300" y1="408" x2="899" y2="408" marker-end="url(#ic)"/>
+          <text class="lbl c halo" x="600" y="386" text-anchor="middle"><tspan class="num">7</tspan>  first deadlines, intake marked done</text>
+          <text class="s halo" x="600" y="400" text-anchor="middle">acknowledge by, status letters, follow-ups; one transaction</text>
+
+          <rect class="box dash" x="215" y="448" width="970" height="98" rx="6" style="stroke: var(--risk)"/>
+          <text class="eb bad" x="231" y="468">STOPS AND OPENS A TASK FOR A PERSON</text>
+          <text class="lbl" x="231" y="492">No policy found, or several match → intake specialist</text>
+          <text class="lbl" x="231" y="512">Lapsed on the date of disability → examiner</text>
+          <text class="lbl" x="231" y="532">Possible duplicate claim → examiner</text>
+          <text class="lbl" x="700" y="492">Sanctions match → hold, compliance review</text>
+          <text class="lbl" x="700" y="512">Issued under 2 years ago → continues, adds</text>
+          <text class="lbl" x="700" y="532">an application review (contestable claim)</text>
+
+          <g class="mk hi"><circle cx="510" cy="140" r="9"/><text x="510" y="143.5" text-anchor="middle">21</text></g>
+          <g class="mk hi"><circle cx="900" cy="256" r="9"/><text x="900" y="259.5" text-anchor="middle">21</text></g>
+          <g class="mk hi"><circle cx="900" cy="408" r="9"/><text x="900" y="411.5" text-anchor="middle">1</text></g>
+        </svg>
+      </div>
+      <figcaption><span>Each step is an activity with retries. The orchestration lasts minutes, or hours if policy admin is slow. It never waits for a person: when something needs judgement it opens a task and stops. The person's decision comes back as an event and starts the next workflow.</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Evidence: one requirement's life</h2>
+      <p class="note">Each piece of evidence is a requirement row: the claim forms, the authorization, a physician's statement, tax returns. Proof of loss is complete when every requirement is accepted or waived.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1100 390" role="img" aria-label="Requirement state machine. A requested requirement is followed up by deadlines at day 14 and 28. When a document arrives, a document workflow marks it received. An examiner or consultant accepts it, or marks it not enough and it is requested again. An examiner can waive a requirement. If the limit is reached it expires and opens an examiner task. When the last requirement is accepted or waived, proof of loss is complete.">
+          <defs>
+            <marker id="ra" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="rc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <rect class="box" x="40" y="160" width="130" height="40" rx="20"/>
+          <text class="t" x="105" y="185" text-anchor="middle">requested</text>
+          <rect class="box" x="330" y="160" width="130" height="40" rx="20"/>
+          <text class="t" x="395" y="185" text-anchor="middle">received</text>
+          <rect class="box key" x="620" y="90" width="130" height="40" rx="20"/>
+          <text class="t" x="685" y="115" text-anchor="middle">accepted</text>
+          <rect class="box" x="620" y="230" width="130" height="40" rx="20"/>
+          <text class="t" x="685" y="255" text-anchor="middle">not enough</text>
+          <rect class="box" x="330" y="40" width="130" height="40" rx="20"/>
+          <text class="t" x="395" y="65" text-anchor="middle">waived</text>
+          <rect class="box" x="40" y="300" width="130" height="40" rx="20" style="stroke: var(--risk)"/>
+          <text class="t" x="105" y="325" text-anchor="middle">expired</text>
+          <rect class="box dash" x="880" y="88" width="190" height="44" rx="4"/>
+          <text class="t" x="975" y="107" text-anchor="middle">proof of loss complete</text>
+          <text class="s" x="975" y="123" text-anchor="middle">decision limit starts</text>
+
+          <path class="ln c" d="M62,160 V132 H96 V159" marker-end="url(#rc)"/>
+          <text class="lbl c halo" x="22" y="122">follow-up deadlines, day 14 and 28</text>
+          <line class="ln c" x1="170" y1="180" x2="329" y2="180" marker-end="url(#rc)"/>
+          <text class="lbl c" x="250" y="172" text-anchor="middle">document workflow</text>
+          <path class="ln" d="M140,160 V60 H329" marker-end="url(#ra)"/>
+          <text class="lbl halo" x="240" y="52" text-anchor="middle">examiner waives</text>
+          <path class="ln" d="M460,170 H540 V110 H619" marker-end="url(#ra)"/>
+          <text class="lbl" x="532" y="130" text-anchor="end">accepted by examiner</text>
+          <text class="lbl" x="532" y="146" text-anchor="end">or consultant</text>
+          <path class="ln" d="M460,190 H540 V250 H619" marker-end="url(#ra)"/>
+          <text class="lbl" x="548" y="286">missing pages, wrong dates</text>
+          <path class="ln" d="M685,270 V300 H220 V195 H171" marker-end="url(#ra)"/>
+          <text class="lbl" x="450" y="318" text-anchor="middle">requested again, new follow-ups</text>
+          <line class="ln c" x1="105" y1="200" x2="105" y2="299" marker-end="url(#rc)"/>
+          <text class="lbl c" x="113" y="256">limit reached</text>
+          <text class="s" x="180" y="354">examiner task: decide on what's there,</text>
+          <text class="s" x="180" y="370">or extend with a notice to the claimant</text>
+          <line class="ln c" x1="750" y1="110" x2="879" y2="110" marker-end="url(#rc)"/>
+          <text class="lbl c" x="814" y="102" text-anchor="middle">last one done</text>
+
+          <g class="mk hi"><circle cx="96" cy="132" r="9"/><text x="96" y="135.5" text-anchor="middle">1</text></g>
+          <g class="mk hi"><circle cx="460" cy="160" r="9"/><text x="460" y="163.5" text-anchor="middle">8</text></g>
+          <g class="mk hi"><circle cx="750" cy="90" r="9"/><text x="750" y="93.5" text-anchor="middle">7</text></g>
+          <g class="mk hi"><circle cx="170" cy="300" r="9"/><text x="170" y="303.5" text-anchor="middle">12</text></g>
+        </svg>
+      </div>
+      <figcaption><span>Blue arrows are workflows and deadlines, and every other writer is named on its arrow. Follow-ups and expiry are deadline rows that belong to the requirement: accepting or waiving it closes them in the same transaction. When the last requirement is accepted or waived, the proof-complete event writes the decision-limit deadline.</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>The clocks, from first notice to decision</h2>
+      <p class="note">One example claim. State rules start some clocks at first notice and others only when proof of loss is complete.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 360" role="img" aria-label="Timeline for one claim over 120 days. State rules: acknowledged on day 1 against a 15-day limit, status letters on days 30 and 60, and a decision limit of 30 days after proof of loss, from day 52 to day 82; the decision is made on day 75. Evidence: claim forms sent day 1 and back day 12, APS requested day 13, followed up day 27 and received day 40, tax returns day 20, proof of loss complete day 52. Policy: a 90-day elimination period, benefits accrue from day 91, first monthly payment around day 120.">
+          <defs>
+            <g id="tclk"><circle r="6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M0,-3.5 V0 H3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></g>
+          </defs>
+          <!-- day axis -->
+          <text class="lbl" x="200" y="34" text-anchor="middle">day 0</text>
+          <text class="lbl" x="320" y="34" text-anchor="middle">15</text>
+          <text class="lbl" x="440" y="34" text-anchor="middle">30</text>
+          <text class="lbl" x="560" y="34" text-anchor="middle">45</text>
+          <text class="lbl" x="680" y="34" text-anchor="middle">60</text>
+          <text class="lbl" x="920" y="34" text-anchor="middle">90</text>
+          <text class="lbl" x="1040" y="34" text-anchor="middle">105</text>
+          <text class="lbl" x="1160" y="34" text-anchor="middle">120</text>
+          <line class="laneline" x1="200" y1="42" x2="1160" y2="42"/>
+
+          <!-- decision line -->
+          <line class="ln dash" x1="800" y1="42" x2="800" y2="330"/>
+          <rect x="758" y="24" width="84" height="16" rx="3" style="fill: var(--surface)"/>
+          <text class="lbl" x="800" y="36" text-anchor="middle" style="font-weight: 600">decided, day 75</text>
+
+          <!-- state rules -->
+          <text class="t" x="24" y="104">State rules</text>
+          <text class="s" x="24" y="121">examples</text>
+          <line class="laneline" x1="200" y1="110" x2="1160" y2="110"/>
+          <circle cx="208" cy="110" r="5" style="fill: var(--ink)"/>
+          <text class="lbl" x="208" y="94">acknowledged, day 1</text>
+          <use href="#tclk" x="320" y="110" style="color: var(--ink-2)"/>
+          <text class="s" x="320" y="134" text-anchor="middle">limit: day 15</text>
+          <use href="#tclk" x="440" y="110" style="color: var(--ink-2)"/>
+          <text class="s" x="440" y="134" text-anchor="middle">status letter</text>
+          <use href="#tclk" x="680" y="110" style="color: var(--ink-2)"/>
+          <text class="s" x="680" y="134" text-anchor="middle">status letter</text>
+          <rect x="616" y="104" width="240" height="12" rx="6" style="fill: var(--cobalt-tint); stroke: var(--cobalt); stroke-width: 1.25"/>
+          <use href="#tclk" x="856" y="110" style="color: var(--cobalt)"/>
+          <text class="lbl c" x="616" y="94">decide within 30 days of proof of loss</text>
+          <text class="s" x="866" y="134">limit: day 82</text>
+
+          <!-- evidence -->
+          <text class="t" x="24" y="204">Evidence</text>
+          <text class="s" x="24" y="221">requirements</text>
+          <line class="laneline" x1="200" y1="210" x2="1160" y2="210"/>
+          <circle cx="208" cy="210" r="4" style="fill: var(--ink-2)"/>
+          <text class="s" x="204" y="196" text-anchor="end">claim forms sent</text>
+          <circle cx="296" cy="210" r="4" style="fill: var(--ink-2)"/>
+          <text class="s" x="296" y="234" text-anchor="end">forms, authorization back</text>
+          <circle cx="304" cy="210" r="4" style="fill: var(--ink-2)"/>
+          <text class="s" x="304" y="196">APS requested</text>
+          <circle cx="360" cy="210" r="4" style="fill: var(--ink-2)"/>
+          <text class="s" x="364" y="234">tax returns in</text>
+          <use href="#tclk" x="416" y="210" style="color: var(--cobalt)"/>
+          <text class="s" x="426" y="196">APS follow-up</text>
+          <circle cx="520" cy="210" r="4" style="fill: var(--ink-2)"/>
+          <text class="s" x="524" y="234">APS in</text>
+          <circle cx="616" cy="210" r="6" style="fill: var(--cobalt)"/>
+          <text class="lbl c" x="624" y="196" style="font-weight: 600">proof of loss complete</text>
+          <line class="ln c dash" x1="616" y1="204" x2="616" y2="117"/>
+
+          <!-- policy -->
+          <text class="t" x="24" y="294">Policy</text>
+          <text class="s" x="24" y="311">example terms</text>
+          <line class="laneline" x1="200" y1="300" x2="1160" y2="300"/>
+          <rect x="200" y="294" width="720" height="12" rx="6" style="fill: var(--pg-tint); stroke: var(--ink-2); stroke-width: 1"/>
+          <text class="s" x="204" y="286">elimination period · 90 days</text>
+          <circle cx="928" cy="300" r="5" style="fill: var(--ink)"/>
+          <text class="s" x="936" y="286">benefits accrue from day 91</text>
+          <path d="M1160,293 l7,7 l-7,7 l-7,-7 z" style="fill: var(--ink)"/>
+          <text class="s" x="1156" y="326" text-anchor="end">first monthly payment, in arrears</text>
+        </svg>
+      </div>
+      <figcaption><span>The decision on day 75 comes before the elimination period ends on day 90. That's normal: benefits are owed from day 91, and the first monthly payment follows at the end of the first benefit month. Each clock on this picture is a deadline row, written by the step that starts it: acknowledgement and status letters at set-up, follow-ups when a requirement is requested, and the decision limit when proof of loss is complete.</span></figcaption>
+    </figure>
+  </section>
+
+  <section id="b1">
+    <div class="head"><span class="tag bad">Branch · A</span><h2>A contestable claim</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="contest"></div>
+      <figcaption>
+        <span>The policy was issued 14 months before the disability, inside the 2-year contestable period, so the requirement set includes an application review. An underwriter compares the application with medical records from before the policy was issued. If the answers were accurate, the claim continues as normal. If there was a material misstatement, the policy can be rescinded with legal and compliance approval: premiums are refunded, and the claimant gets a letter with appeal rights.</span>
+        <span class="breaks">Can break at 1 (the review limit isn't written), 7 (two people change the decision at once).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="b2">
+    <div class="head"><span class="tag bad">Branch · B</span><h2>Evidence stalls near the limit</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="stall"></div>
+      <figcaption>
+        <span>The physician's statement doesn't arrive. Two follow-up deadlines fire, each asking the records vendor to chase and writing to the claimant. On day 55 the requirement expires and opens an examiner task. The examiner pends the claim and tells the claimant what's missing. Where the state allows, a new limit is written. The alternative is to decide on the evidence already there. The records arrive on day 70 and the claim moves to review.</span>
+        <span class="breaks">Can break at 12 (the expiry task sits unworked), 16 (the notice can't be sent).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="b3">
+    <div class="head"><span class="tag good">Branch · C</span><h2>Three ways a decision lands</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="outcomes"></div>
+      <figcaption>
+        <span>An approval creates payment items from day 91 and hands the claim to the monthly cycle. An approval with a limit, such as 24 months for a mental health condition under many policies, records the limit on the benefit line and writes a deadline for the month it ends. A denial sends a letter with the claimant's rights and writes the reconsideration window, which starts scenario 6 on the scenarios page.</span>
+        <span class="breaks">Can break at 9 (the limit or the start date is set from the wrong version), 16 (a decision letter can't be sent).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head"><h2>Who works on the claim before the decision</h2></div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Role</th><th>Does</th><th>Gets work from</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">Intake specialist</td><td>Takes first notice, fixes policy matches the checks couldn't make</td><td class="dim">Intake tasks</td></tr>
+          <tr><td class="strong">Examiner</td><td>Owns the claim: requests and accepts evidence, waives what isn't needed, decides</td><td class="dim">My work queue, expired requirements, review results</td></tr>
+          <tr><td class="strong">Medical consultant</td><td>A nurse or physician who reviews records and states restrictions and limitations</td><td class="dim">Review tasks, created when proof of loss is complete</td></tr>
+          <tr><td class="strong">Vocational consultant</td><td>Describes the claimant's occupation and what its duties need</td><td class="dim">Review tasks, for own-occupation questions</td></tr>
+          <tr><td class="strong">Financial analyst</td><td>Establishes pre-disability income, for residual and business overhead claims</td><td class="dim">Review tasks, when income evidence is accepted</td></tr>
+          <tr><td class="strong">Underwriter, legal, compliance</td><td>Contestable reviews and any rescission</td><td class="dim">Application review requirements</td></tr>
+          <tr><td class="strong">Special investigations</td><td>Looks into suspected fraud; its hold stops the decision</td><td class="dim">Referrals from examiners or rules</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Every task lives in Postgres and shows in the work queues. When a person finishes a task, that's an event: it goes through the outbox and starts the next short workflow. No workflow sits waiting for a person.</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  var P = 'people', S = 'state', D = 'deadlines', T = 'temporal', B = 'batch', E = 'external';
+
+  Swimlane.add('path', {
+    aria: 'Swimlane from first notice to decision for a disability claim: intake checks, claim set-up with the first deadlines and letters, evidence arriving and being chased, proof of loss complete starting the decision limit and review tasks, the examiner deciding, and benefit set-up handing over to monthly benefits.',
+    phases: [
+      { n: 'First notice', c: 'day 0', w: 1 },
+      { n: 'Set up', c: 'day 0–1', w: 1.3 },
+      { n: 'Gather evidence', c: 'days 1–52', w: 1.7 },
+      { n: 'Review', c: 'days 52–75', w: 1.5 },
+      { n: 'Decide', c: 'within the limit', w: 1.2 },
+      { n: 'Hand over', c: 'to monthly benefits', w: 1.3 }
+    ],
+    items: [
+      [P, 0, .5, 0, 'chip', 'first notice', 'pn'],
+      [P, 2, .2, 0, 'chip', 'tax returns', 'pt'],
+      [P, 2, .8, 0, 'chip', 'physician: APS', 'pa'],
+      [P, 3, .72, 0, 'chip', 'medical consultant'],
+      [P, 3, .72, 1, 'chip', 'financial analyst'],
+      [P, 4, .5, 0, 'chip', 'examiner decides', 'pd'],
+      { k: 'track', lane: S, p: 0, t: 'received' },
+      { k: 'track', lane: S, p: 1, t: 'set up' },
+      { k: 'track', lane: S, p: 2, t: 'gathering evidence' },
+      { k: 'track', lane: S, p: 3, t: 'in review' },
+      { k: 'track', lane: S, p: 4, to: 5, t: 'decided · approved' },
+      [S, 0, .5, 1, 'chip', 'notice logged'],
+      [S, 1, .5, 1, 'chip', 'claim, benefit lines'],
+      [S, 2, .2, 1, 'chip', 'income accepted'],
+      [S, 2, .8, 1, 'chip', 'APS accepted'],
+      [S, 3, .28, 1, 'chip', 'proof of loss complete', 'sp'],
+      [S, 4, .5, 1, 'chip', 'decision locked'],
+      [S, 5, .5, 1, 'chip', 'benefits from day 91'],
+      [D, 1, .5, 0, 'done', 'acknowledge · day 15', 'dk'],
+      [D, 1, .5, 1, 'due', 'letter every 30 days'],
+      [D, 2, .8, 0, 'done', 'APS due'],
+      [D, 2, .5, 1, 'due', 'APS follow-up', 'df'],
+      [D, 3, .72, 0, 'due', 'decision limit · +30 days'],
+      [D, 4, .5, 0, 'done', 'decision limit'],
+      [D, 4, .5, 1, 'done', 'status letter'],
+      [D, 5, .75, 0, 'due', 'period opens', 'dp'],
+      [T, 0, .5, 0, 'wfE', 'intake checks', 'w0', 'pn'],
+      [T, 1, .5, 0, 'wfE', 'set up claim', 'w1'],
+      [T, 1, .5, 1, 'chip', 'requirements, letters'],
+      [T, 2, .2, 0, 'wfE', 'document', 'w2a', 'pt'],
+      [T, 2, .8, 0, 'wfE', 'document', 'w2b', 'pa'],
+      [T, 2, .5, 1, 'wfD', 'follow-up', 'w2f', 'df'],
+      [T, 3, .28, 0, 'wfE', 'proof complete', 'w3', 'sp'],
+      [T, 3, .72, 1, 'chip', 'review tasks created'],
+      [T, 4, .5, 0, 'wfE', 'decision', 'w4', 'pd'],
+      [T, 5, .75, 0, 'wfD', 'open period', 'w5', 'dp'],
+      [T, 5, .3, 1, 'wfE', 'benefit set-up', 'w5b'],
+      [B, 5, .75, 0, 'chip', 'payment run'],
+      [E, 0, .5, 0, 'chip', 'policy admin'],
+      [E, 0, .5, 1, 'chip', 'sanctions screen'],
+      [E, 1, .5, 0, 'chip', 'acknowledgement letter'],
+      [E, 1, .5, 1, 'chip', 'forms, authorization'],
+      [E, 2, .5, 0, 'chip', 'records vendor: chase'],
+      [E, 3, .72, 0, 'chip', 'IME if needed'],
+      [E, 4, .5, 0, 'chip', 'decision letter'],
+      [E, 5, .75, 0, 'chip', 'bank'],
+      [E, 5, .3, 1, 'chip', 'policy admin: waiver']
+    ],
+    marks: [{ on: 'w0', n: 21 }, { on: 'dk', n: 1 }, { on: 'w2f', n: 16 }, { on: 'w3', n: 5 }, { on: 'w4', n: 7 }, { on: 'w5b', n: 9 }]
+  });
+
+  Swimlane.add('contest', {
+    aria: 'Contestable claim: intake flags a policy issued 14 months ago and adds an application review; an underwriter compares the application with older medical records; outcome A continues the claim, outcome B rescinds the policy with legal and compliance approval, refunds premiums and sends a letter with appeal rights.',
+    phases: [
+      { n: 'Intake', c: 'policy issued 14 months ago', w: 1.3 },
+      { n: 'Application review', c: 'weeks 2–8', w: 1.6 },
+      { n: 'A · answers accurate', c: 'claim continues', w: 1.4, tone: 'good' },
+      { n: 'B · material misstatement', c: 'rescission', w: 1.5, tone: 'bad' }
+    ],
+    items: [
+      [P, 0, .5, 0, 'chip', 'first notice', 'pn'],
+      [P, 1, .3, 0, 'chip', 'underwriter reviews'],
+      [P, 1, .75, 1, 'chip', 'physicians: older records', 'po'],
+      [P, 2, .5, 0, 'chip', 'underwriter: no issue', 'pa'],
+      [P, 3, .5, 0, 'neg', 'legal, compliance approve', 'pl'],
+      [P, 3, .5, 1, 'chip', 'claimant can appeal'],
+      { k: 'track', lane: S, p: 0, t: 'set up · contestable' },
+      { k: 'track', lane: S, p: 1, t: 'application review' },
+      { k: 'track', lane: S, p: 2, t: 'evidence, review' },
+      { k: 'track', lane: S, p: 3, t: 'rescinded', tone: 'bad' },
+      [S, 0, .5, 1, 'chip', 'contestable flag'],
+      [S, 1, .75, 1, 'chip', 'older records attached'],
+      [S, 2, .5, 1, 'chip', 'review requirement met'],
+      [S, 3, .5, 1, 'chip', 'decision locked'],
+      [D, 1, .3, 0, 'due', 'review limit', 'dr'],
+      [D, 3, .5, 0, 'due', 'appeal window'],
+      [T, 0, .5, 0, 'wfE', 'intake checks', 'w0', 'pn'],
+      [T, 0, .5, 1, 'chip', 'adds application review'],
+      [T, 1, .75, 0, 'wfE', 'document', 'w1', 'po'],
+      [T, 2, .5, 0, 'wfE', 'requirement accepted', 'w2', 'pa'],
+      [T, 3, .5, 0, 'wfE', 'rescind policy', 'w3', 'pl'],
+      [E, 1, .3, 0, 'chip', 'records vendor'],
+      [E, 3, .5, 0, 'chip', 'policy admin: rescind'],
+      [E, 3, .5, 1, 'chip', 'premium refund, letter']
+    ],
+    marks: [{ on: 'dr', n: 1 }, { on: 'pl', n: 7 }]
+  });
+
+  Swimlane.add('stall', {
+    aria: 'Evidence stalls: the APS is requested on day 13, follow-up deadlines fire on days 27 and 41 and the records vendor chases, the requirement expires on day 55 and opens an examiner task, the examiner pends the claim with a notice and a new limit, and the records arrive on day 70.',
+    phases: [
+      { n: 'Day 13', c: 'APS requested', w: 1.2 },
+      { n: 'Days 27, 41', c: 'follow-ups', w: 1.4 },
+      { n: 'Day 55', c: 'requirement expires', w: 1.3, tone: 'bad' },
+      { n: 'Day 56', c: 'examiner decides next step', w: 1.5 },
+      { n: 'Day 70', c: 'records arrive', w: 1.3 }
+    ],
+    items: [
+      [P, 3, .5, 1, 'chip', 'examiner: pend, notify', 'pe'],
+      [P, 3, .5, 0, 'neg', 'or: decide on what is there'],
+      [P, 4, .5, 0, 'chip', 'physician sends APS', 'pa'],
+      { k: 'track', lane: S, p: 0, to: 2, x1: .45, t: 'waiting for APS' },
+      { k: 'track', lane: S, p: 2, x0: .5, to: 3, t: 'pended, claimant told', tone: 'bad' },
+      { k: 'track', lane: S, p: 4, t: 'in review' },
+      [S, 0, .5, 1, 'chip', 'requirement: requested'],
+      [S, 2, .5, 1, 'chip', 'examiner task'],
+      [S, 3, .5, 1, 'chip', 'notice logged'],
+      [S, 4, .5, 1, 'chip', 'APS accepted'],
+      [D, 1, .5, 0, 'due', 'follow-up ×2', 'd1'],
+      [D, 2, .5, 0, 'due', 'APS expires', 'd2'],
+      [D, 3, .5, 0, 'due', 'new limit · 30 days'],
+      [D, 4, .5, 0, 'done', 'new limit'],
+      [T, 0, .5, 0, 'wfE', 'request APS'],
+      [T, 1, .5, 0, 'wfD', 'follow-up', 'w1', 'd1'],
+      [T, 2, .5, 0, 'wfD', 'requirement expired', 'w2', 'd2'],
+      [T, 3, .5, 0, 'wfE', 'pend notice', 'w3', 'pe'],
+      [T, 4, .5, 0, 'wfE', 'document', 'w4', 'pa'],
+      [E, 0, .5, 0, 'chip', 'records vendor'],
+      [E, 1, .5, 0, 'chip', 'records vendor: chase'],
+      [E, 1, .5, 1, 'chip', 'letter to claimant'],
+      [E, 3, .5, 0, 'chip', 'letter: what is missing', 'e3']
+    ],
+    marks: [{ on: 'w2', n: 12 }, { on: 'e3', n: 16 }]
+  });
+
+  Swimlane.add('outcomes', {
+    aria: 'Three decision outcomes side by side: approve, which creates payment items from day 91 and opens the first period; approve with a 24-month limit, which records the limit on the benefit line and writes a deadline for when it ends; and deny, which sends a letter with rights and writes the reconsideration window.',
+    phases: [
+      { n: 'Approve', c: 'benefits from day 91', w: 1.6, tone: 'good' },
+      { n: 'Approve with a limit', c: 'e.g. 24 months, mental health', w: 1.7 },
+      { n: 'Deny', c: 'with rights', w: 1.6, tone: 'bad' }
+    ],
+    items: [
+      [P, 0, .3, 0, 'chip', 'examiner approves', 'a'],
+      [P, 1, .22, 0, 'chip', 'approves, limited to 24 months', 'b'],
+      [P, 2, .3, 0, 'neg', 'examiner denies', 'c'],
+      { k: 'track', lane: S, p: 0, t: 'approved · paying' },
+      { k: 'track', lane: S, p: 1, t: 'approved · limited' },
+      { k: 'track', lane: S, p: 2, t: 'denied', tone: 'bad' },
+      [S, 0, .3, 1, 'chip', 'decision locked'],
+      [S, 0, .75, 1, 'chip', 'items from day 91'],
+      [S, 1, .22, 1, 'chip', 'decision locked'],
+      [S, 1, .82, 1, 'chip', 'limit on benefit line', 'sl'],
+      [S, 2, .3, 1, 'chip', 'decision locked'],
+      [D, 0, .75, 0, 'due', 'period opens', 'da'],
+      [D, 1, .82, 0, 'due', 'period opens', 'db'],
+      [D, 1, .52, 1, 'due', 'limit ends · month 24'],
+      [D, 2, .7, 0, 'due', 'reconsideration window'],
+      [T, 0, .3, 0, 'wfE', 'decision', 'wa', 'a'],
+      [T, 0, .3, 1, 'wfE', 'benefit set-up'],
+      [T, 0, .75, 0, 'wfD', 'open period', 'wa2', 'da'],
+      [T, 1, .22, 0, 'wfE', 'decision', 'wb', 'b'],
+      [T, 1, .22, 1, 'wfE', 'benefit set-up'],
+      [T, 1, .82, 0, 'wfD', 'open period', 'wb2', 'db'],
+      [T, 2, .3, 0, 'wfE', 'decision', 'wc', 'c'],
+      [B, 0, .75, 0, 'chip', 'payment run'],
+      [B, 1, .82, 0, 'chip', 'payment run'],
+      [E, 0, .3, 0, 'chip', 'approval letter'],
+      [E, 0, .75, 0, 'chip', 'bank'],
+      [E, 1, .22, 0, 'chip', 'letter explains the limit'],
+      [E, 1, .82, 0, 'chip', 'bank'],
+      [E, 2, .3, 0, 'chip', 'denial letter, rights', 'ec']
+    ],
+    marks: [{ on: 'sl', n: 9 }, { on: 'ec', n: 16 }]
+  });
+})();
+</script>
+</body>
+</html>

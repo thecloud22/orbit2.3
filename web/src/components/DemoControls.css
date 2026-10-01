@@ -1,0 +1,88 @@
+/* Demo controls: live mode only. Docked, never floating over the claim.
+   Closed: one slim bar under the page (a pill with the next hint, and the clock).
+   Open: a strip along the bottom (default) or a column on the right; the page makes room for it. */
+.dmc { background: var(--surface); font-size: 12.5px; color: var(--ink); flex-shrink: 0; }
+
+/* ---------- Closed: a slim bar ---------- */
+.dmc--closed { display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 12px 0 8px; border-top: 1px solid var(--accent-line); }
+.dc-toggle.dmc-pill { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; height: 24px; padding: 0 10px; border: 1px solid var(--accent-line); border-radius: 12px; background: var(--info-bg); font-weight: 600; color: var(--ink); text-align: left; }
+.dc-toggle.dmc-pill:hover { background: var(--accent-tint); }
+.dmc-name { font-weight: 700; white-space: nowrap; }
+.dmc-mode { font-size: 11px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.dmc-hint { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; color: var(--ink-2); }
+.dmc-hint strong { font-weight: 700; color: var(--ink); }
+.dmc-fault { flex: 0 1 auto; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; border: 1px solid var(--critical-line, #E3B7B1); border-radius: 10px; background: var(--critical-bg, #FDF3F1); color: var(--critical-ink); font-size: 11.5px; font-weight: 700; line-height: 20px; }
+.dmc-clock { flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ---------- Open ---------- */
+.dmc--open { display: flex; flex-direction: column; border-top: 1px solid var(--accent-line); }
+.dmc--bottom { height: clamp(196px, 27vh, 250px); box-shadow: 0 -4px 14px rgba(0, 0, 0, .06); }
+.dmc--right {
+  position: fixed; right: 0; bottom: 0; top: var(--dmc-top, 84px); width: 300px; z-index: 30;
+  border-top: 0; border-left: 1px solid var(--accent-line); box-shadow: -4px 0 14px rgba(0, 0, 0, .06);
+}
+/* DemoControls sets --dmc-right on the root while docked on the right, so the page narrows instead of being covered. */
+.app-body { padding-right: var(--dmc-right, 0px); box-sizing: border-box; }
+
+.dmc-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; row-gap: 4px; padding: 3px 10px 3px 2px; border-bottom: 1px solid var(--line); background: var(--sunken); flex-shrink: 0; }
+.dc-toggle { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border: 0; background: transparent; font-weight: 700; color: var(--ink); text-align: left; border-radius: 6px; }
+.dc-toggle:hover { background: var(--hover); }
+.dc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); flex-shrink: 0; }
+.dc-dot--up { background: var(--positive-bar, #2F7D4F); }
+.dc-dot--down { background: var(--critical-ink); }
+.dc-live { font-size: 10.5px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent-line); border-radius: 3px; padding: 0 5px; }
+
+.dmc-tabs { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface); }
+.dmc-tab { height: 24px; padding: 0 10px; border: 0; border-radius: 5px; background: transparent; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.dmc-tab:hover { color: var(--ink); }
+.dmc-tab--on { background: var(--accent); color: #fff; }
+.dmc-dock { display: inline-flex; gap: 2px; align-items: center; }
+.dmc-dock .btn[aria-pressed=true] { background: var(--accent-tint); color: var(--accent); font-weight: 700; }
+
+/* Bottom: three columns, the clock and events on the left, what to do next in the middle, the checklist on the right. */
+.dmc-body { flex: 1 1 auto; min-height: 0; display: grid; gap: 0 14px; padding: 0 12px; overflow: hidden; }
+.dmc--bottom .dmc-body { grid-template-columns: minmax(270px, 320px) minmax(0, 1fr) minmax(280px, 380px); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: 'clock guide steps' 'events guide steps'; }
+.dmc-guide { display: contents; }
+.dmc-clockcol { grid-area: clock; }
+.dmc-eventscol { grid-area: events; }
+.dmc-guidecol { grid-area: guide; }
+.dmc-stepscol { grid-area: steps; }
+.dmc-col { min-width: 0; min-height: 0; overflow-y: auto; padding: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.dmc-guidecol, .dmc-stepscol { border-left: 1px solid var(--line); padding-left: 14px; }
+.dmc-eventscol { padding-top: 0; }
+.dmc-guidecol .dc-next { font-size: 13.5px; line-height: 1.5; }
+
+.dmc--right .dmc-body { display: flex; flex-direction: column; overflow-y: auto; padding: 0 12px 12px; gap: 0; }
+.dmc--right .dmc-col { overflow: visible; flex-shrink: 0; }
+.dmc--right .dmc-guidecol { order: -1; border-left: 0; padding-left: 0; border-bottom: 1px solid var(--line); }
+.dmc--right .dmc-clockcol { order: 0; border-bottom: 1px solid var(--line); }
+.dmc--right .dmc-stepscol { order: 1; border-left: 0; padding-left: 0; border-bottom: 1px solid var(--line); }
+.dmc--right .dmc-eventscol { order: 2; padding-top: 8px; }
+
+.dc-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.dc-label { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-3); }
+.dc-now { font-size: 13.5px; }
+.dc-sub { color: var(--ink-3); line-height: 1.4; }
+.dc-mono { font-family: var(--font-mono, monospace); font-size: 11.5px; color: var(--ink-3); }
+.dc-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.dc-buttons .btn:disabled { opacity: .5; }
+
+.dmc-date { height: 28px; width: 132px; font-size: 12px; padding: 0 6px; }
+.dmc-faults { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.dmc-chip { padding: 0 8px; border: 1px solid var(--critical-line, #E3B7B1); border-radius: 10px; background: var(--critical-bg, #FDF3F1); color: var(--critical-ink); font-size: 11.5px; font-weight: 700; line-height: 20px; }
+
+.dc-guide { display: flex; flex-direction: column; gap: 6px; }
+.dc-next { margin: 0; line-height: 1.45; }
+.dc-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.dc-step { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 6px; line-height: 1.35; color: var(--ink-3); font-size: 12px; }
+.dc-step--done { color: var(--ink-2); }
+.dc-step--current { color: var(--ink); font-weight: 700; }
+.dc-tick { text-align: center; font-weight: 700; }
+.dc-step--done .dc-tick { color: var(--positive-ink, #1D6340); }
+.dc-step--current .dc-tick { color: var(--accent); }
+
+.dmc-events > summary { cursor: pointer; padding: 4px 0; }
+.dmc-events[open] > summary { padding-bottom: 6px; }
+.dc-scenarios { display: flex; flex-direction: column; gap: 4px; }
+.dc-group { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+.dc-group-name { font-size: 11.5px; }

@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claims Failure Handling</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="claims-v2.css">
+<script src="swimlane-v2.js"></script>
+
+</head>
+<body>
+<div class="wrap">
+  <nav class="pagenav" aria-label="Claims backend v2">
+    <span class="ver">V2</span>
+    <a href="temporal-explained-v2.html">Temporal, explained</a>
+    <a href="temporal-layers-v2.html">Layer by layer</a>
+    <a href="with-without-temporal-v2.html">With vs without</a>
+    <a href="backend-architecture-v2.html">Architecture</a>
+    <a href="intake-to-decision-v2.html">Intake to decision</a>
+    <a href="disability-scenarios-v2.html">Disability scenarios</a>
+    <a href="failure-handling-v2.html" aria-current="page">Failure handling</a>
+    <a href="product-change-v2.html">Product changes</a>
+  </nav>
+
+  <header>
+    <div class="eyebrow">Claims platform · failure handling · v2</div>
+    <h1>Claims Failure Handling</h1>
+    <p class="lede">How the v2 design fails and how each failure is caught. The worst failures in claims are silent: a missed payment, an overpayment, a letter that never went out. So every failure has to reach a person within a known time, and every fix has to be safe to repeat.</p>
+  </header>
+
+  <section>
+    <div class="head">
+      <h2>Five layers, each slower and more expensive than the last</h2>
+      <p class="note">A failure that gets past one layer is caught by the next. The goal is to stop almost everything in the first three layers, within the hour.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 486" role="img" aria-label="Five layers of defence on a time axis. Automatic retries in Temporal work within seconds to hours. A workflow that gives up raises an alert and an ops task within minutes. Overdue alerts fire within the hour. Nightly checks catch the rest by the next morning. Reconciliation and audit catch what is left by month end. Repair tools sit underneath all of them.">
+          <defs>
+            <marker id="fa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <rect class="box tmp" x="40" y="30" width="260" height="56" rx="4"/>
+          <text class="t" x="56" y="53">1 · Automatic retry</text>
+          <text class="s" x="56" y="72">retries each activity with backoff</text>
+          <rect class="box" x="265" y="92" width="260" height="56" rx="4"/>
+          <text class="t" x="281" y="115">2 · Workflow fails, alert</text>
+          <text class="s" x="281" y="134">ops task; deadline stays dispatched</text>
+          <rect class="box" x="490" y="154" width="260" height="56" rx="4"/>
+          <text class="t" x="506" y="177">3 · Overdue alert</text>
+          <text class="s" x="506" y="196">deadline over an hour late, run late</text>
+          <rect class="box" x="715" y="216" width="260" height="56" rx="4"/>
+          <text class="t" x="731" y="239">4 · Nightly checks</text>
+          <text class="s" x="731" y="258">items, deadlines, holds, workflows</text>
+          <rect class="box" x="940" y="278" width="240" height="56" rx="4"/>
+          <text class="t" x="956" y="301">5 · Reconciliation and audit</text>
+          <text class="s" x="956" y="320">bank, reserves, compliance sampling</text>
+
+          <path class="ln" d="M245,86 V120 H264" marker-end="url(#fa)"/>
+          <text class="lbl" x="237" y="110" text-anchor="end">still failing</text>
+          <path class="ln" d="M470,148 V182 H489" marker-end="url(#fa)"/>
+          <text class="lbl" x="462" y="172" text-anchor="end">nobody acted</text>
+          <path class="ln" d="M695,210 V244 H714" marker-end="url(#fa)"/>
+          <text class="lbl" x="687" y="234" text-anchor="end">no alert fired</text>
+          <path class="ln" d="M920,272 V306 H939" marker-end="url(#fa)"/>
+          <text class="lbl" x="912" y="296" text-anchor="end">looked right</text>
+
+          <line class="life" x1="170" y1="86" x2="170" y2="394"/>
+          <line class="life" x1="395" y1="148" x2="395" y2="394"/>
+          <line class="life" x1="620" y1="210" x2="620" y2="394"/>
+          <line class="life" x1="845" y1="272" x2="845" y2="394"/>
+          <line class="life" x1="1060" y1="334" x2="1060" y2="394"/>
+
+          <text class="eb" x="40" y="382">TIME UNTIL SOMEONE KNOWS →</text>
+          <line class="ln" x1="40" y1="398" x2="1180" y2="398"/>
+          <text class="lbl" x="170" y="416" text-anchor="middle">seconds to hours</text>
+          <text class="lbl" x="395" y="416" text-anchor="middle">minutes after giving up</text>
+          <text class="lbl" x="620" y="416" text-anchor="middle">within the hour</text>
+          <text class="lbl" x="845" y="416" text-anchor="middle">next morning</text>
+          <text class="lbl" x="1060" y="416" text-anchor="middle">month end</text>
+
+          <rect class="box dash" x="40" y="436" width="1140" height="36" rx="4"/>
+          <text class="lbl" x="610" y="459" text-anchor="middle">Repair tools under every layer: re-run a workflow with the same ID · adjustment items · reopen a claim · place or release a hold · re-fire a deadline</text>
+        </svg>
+      </div>
+      <figcaption><span>Layer 1 is Temporal's own retry. Everything after that is ours to build: alerts, nightly checks against Postgres, and month-end reconciliation. Every repair tool is safe to run twice, because each workflow ID, deadline and item has a key.</span></figcaption>
+    </figure>
+  </section>
+
+  <section id="f1">
+    <div class="head"><span class="tag fail">Failure · A</span><h2>The letters vendor is down for two days</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="f1"></div>
+      <figcaption>
+        <span>Status letters have a legal deadline, so their deadlines fire five days before it. When the vendor goes down, Temporal retries for four hours, then the workflows fail and raise an alert. The deadlines stay dispatched, so the nightly check would also see them. Ops switches to in-house print and re-runs the same 42 workflows. Their IDs make a second letter impossible. Each letter is logged with the date it was sent, and compliance checks that none went past the legal limit.</span>
+        <span class="breaks">Break points 6 (workflow fails after retries) and 16 (outside system down near a legal deadline).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="f2">
+    <div class="head"><span class="tag fail">Failure · B</span><h2>Workers are down overnight</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="f2"></div>
+      <figcaption>
+        <span>The dispatcher keeps starting workflows for due deadlines, but nobody runs them, so they queue in Temporal. The queue-wait alert pages on-call. When the workers come back, all 310 run. Each one re-checks the claim first: 12 find that proof came in overnight and skip, the rest send their letters. Nothing is lost, and nothing is sent that no longer applies.</span>
+        <span class="breaks">Break points 2 (nothing runs, caught by the overdue alert), 3 (deadlines fire late), 6 (workers failing).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="f3">
+    <div class="head"><span class="tag fail">Failure · C</span><h2>A bad calculation is found three months later</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="f3"></div>
+      <figcaption>
+        <span>A rules release in January gets the cost-of-living increase wrong, and 1,200 claims are paid the wrong amount for three months. The nightly sample recalculation finds the mismatch in April. An actuary spotting reserves that don't add up is the slower backstop. The fix is a new rules version. A correction workflow per claim recalculates each paid month with the version that should have applied and writes adjustment items. Underpayments are paid with interest, and overpayments are offset against future payments.</span>
+        <span class="breaks">Break points 9 (wrong version used) and 10 (paid periods change).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Every failure, and what catches it</h2>
+      <p class="note">Numbers match the red markers on the scenario pages. Filled numbers are silent or costly: a missed payment, an overpayment, a regulatory breach. Outlined numbers are noisy and caught quickly.</p>
+    </div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>#</th><th>Failure</th><th>What happens</th><th>Guard</th><th>How you find out</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge hi">1</span></td><td class="strong">Deadline never written</td><td class="dim">A state change forgets its deadline. The letter or review never happens, and nothing errors.</td><td>Each state declares the deadlines it needs. The transition writes them in the same transaction.</td><td class="dim">Nightly check: every claim in a state has that state's deadlines</td></tr>
+          <tr><td><span class="badge hi">2</span></td><td class="strong">Dispatcher stops</td><td class="dim">The Schedule that starts due deadlines is paused or failing, so nothing fires.</td><td>Schedule health on the platform dashboard.</td><td class="dim">Alert when any deadline is over an hour overdue</td></tr>
+          <tr><td><span class="badge lo">3</span></td><td class="strong">Deadlines fire late</td><td class="dim">After an outage a backlog fires at once, acting on situations that have changed.</td><td>Every handler re-checks state first. Letters carry the date they were sent.</td><td class="dim">Skipped deadlines are logged with the reason</td></tr>
+          <tr><td><span class="badge lo">4</span></td><td class="strong">Deadline fires twice</td><td class="dim">A duplicate letter or a double transition.</td><td>Workflow ID = deadline ID, duplicates rejected. Deadlines move open → dispatched → done.</td><td class="dim">Temporal rejects the second start</td></tr>
+          <tr><td><span class="badge hi">5</span></td><td class="strong">Event saved, workflow never started</td><td class="dim">The API saves the proof, then crashes before starting the workflow.</td><td>An outbox row in the same transaction. A relay starts the workflow with the event ID.</td><td class="dim">Nightly check: no outbox row older than an hour</td></tr>
+          <tr><td><span class="badge hi">6</span></td><td class="strong">Workflow fails after retries</td><td class="dim">A vendor is down for hours, or there's a bug.</td><td>Failed-workflow alert and an ops task. Re-run with the same ID once fixed.</td><td class="dim">Alert within minutes; the deadline stays dispatched</td></tr>
+          <tr><td><span class="badge hi">7</span></td><td class="strong">Two writers on one record</td><td class="dim">An examiner and a workflow change the same item or benefit line at once.</td><td>One state machine per record, checking the current status before any change. Human decisions win.</td><td class="dim">Rejected changes are logged and open a task</td></tr>
+          <tr><td><span class="badge hi">8</span></td><td class="strong">Proof doesn't fit the periods</td><td class="dim">Proof is late, early, covers several months or policies, or arrives on paper.</td><td>Attach to the claim with the periods it covers. One workflow per document.</td><td class="dim">Unmatched documents open an examiner task</td></tr>
+          <tr><td><span class="badge hi">9</span></td><td class="strong">Wrong version used</td><td class="dim">A calculation or check reads the wrong policy form, rules or definition.</td><td>Policy form version pinned on the benefit line. Each calculation stores the versions it used.</td><td class="dim">Nightly sample recalculation</td></tr>
+          <tr><td><span class="badge hi">10</span></td><td class="strong">Paid periods change</td><td class="dim">True-ups, appeals, back pay, a bad calculation.</td><td>Adjustment items only. Paid items are never edited.</td><td class="dim">Items reconciled to bank payments</td></tr>
+          <tr><td><span class="badge hi">11</span></td><td class="strong">Claim closes with money in flight</td><td class="dim">Recovery, death or the end of the benefit period while items are open or already in a bank file.</td><td>Close cancels open items and deadlines in one transaction. The payment run re-checks. A late stop becomes a recovery task.</td><td class="dim">Nightly check: nothing paid after the end date</td></tr>
+          <tr><td><span class="badge hi">12</span></td><td class="strong">Forgotten hold or backlog</td><td class="dim">A hold nobody reviews. Review tasks pile up and payments go out late.</td><td>Every hold writes a review deadline. Unchanged proof clears automatically.</td><td class="dim">Hold review deadlines fire; a queue ageing report</td></tr>
+          <tr><td><span class="badge lo">13</span></td><td class="strong">Payment run and bank</td><td class="dim">An item taken twice, a file sent twice or not at all, a run that doesn't start.</td><td>Items taken in one step with the run ID. File IDs and bank acknowledgement.</td><td class="dim">Alert if the run hasn't finished by a set time</td></tr>
+          <tr><td><span class="badge lo">14</span></td><td class="strong">Returned payment repeats</td><td class="dim">Next month pays the same closed account.</td><td>The hold goes on the payee's payment method.</td><td class="dim">The returns job</td></tr>
+          <tr><td><span class="badge hi">15</span></td><td class="strong">Go-live conversion</td><td class="dim">Claims already in progress are loaded without items or deadlines, or with the wrong statuses.</td><td>Rehearse the conversion. Convert deadlines too. Run the nightly checks before cutover.</td><td class="dim">The nightly checks, run on converted data</td></tr>
+          <tr><td><span class="badge hi">16</span></td><td class="strong">Outside system down near a legal deadline</td><td class="dim">A regulatory letter can't be sent in time.</td><td>Deadlines fire days before the legal limit. A fallback channel. A late-letter log.</td><td class="dim">Failed-workflow alert and the late-letter log</td></tr>
+          <tr><td><span class="badge hi">17</span></td><td class="strong">Payments depend on a shared platform</td><td class="dim">Temporal, shared with other teams, is down on payment day.</td><td>The payment run doesn't use Temporal. It has its own scheduler and can be run by hand.</td><td class="dim">The payment-run alert (13)</td></tr>
+          <tr><td><span class="badge lo">18</span></td><td class="strong">Shared platform limits</td><td class="dim">Other teams' load, or a platform upgrade, slows our workflows.</td><td>Our own namespace, task-queue rate limits, agreed support from the platform team.</td><td class="dim">Queue-wait alert</td></tr>
+          <tr><td><span class="badge lo">19</span></td><td class="strong">Bad workflow deploy</td><td class="dim">New workflow code fails on running workflows.</td><td>Workflows are short and pinned to their build. Roll back. Replay tests in CI.</td><td class="dim">Failed-workflow alert</td></tr>
+          <tr><td><span class="badge lo">20</span></td><td class="strong">Postgres failover</td><td class="dim">Transactions are cut off part-way.</td><td>Activities are idempotent, with keys, and Temporal retries them.</td><td class="dim">Handled automatically</td></tr>
+          <tr><td><span class="badge hi">21</span></td><td class="strong">Wrong policy matched, or a duplicate claim</td><td class="dim">Intake finds the wrong policy or several policies, or opens a second claim for the same disability.</td><td>Match on policy number and insured identity. Any doubt opens an intake task. Check for an open claim with the same insured and dates.</td><td class="dim">Intake task queue; nightly check for two open claims on one insured</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>The payment item: who can change it</h2>
+      <p class="note">Most money failures come down to this one record, so it gets its own state machine.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1060 340" role="img" aria-label="Payment item state machine. The proof workflow moves an item from awaiting proof to cleared, and the proof-due deadline moves it to held. Examiners or a sanctions hit move a cleared item to held; examiners release it. The payment run moves cleared items to in run, and the bank acknowledgement moves them to paid. A returns file moves a paid item to returned. A later correction creates a new adjustment item. Closing the claim cancels awaiting, cleared or held items.">
+          <defs>
+            <marker id="sh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="shc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <rect class="box" x="40" y="150" width="130" height="40" rx="20"/>
+          <text class="t" x="105" y="175" text-anchor="middle">awaiting proof</text>
+          <rect class="box" x="330" y="150" width="130" height="40" rx="20"/>
+          <text class="t" x="395" y="175" text-anchor="middle">cleared</text>
+          <rect class="box" x="620" y="150" width="130" height="40" rx="20"/>
+          <text class="t" x="685" y="175" text-anchor="middle">in run</text>
+          <rect class="box key" x="880" y="150" width="130" height="40" rx="20"/>
+          <text class="t" x="945" y="175" text-anchor="middle">paid</text>
+          <rect class="box" x="330" y="40" width="130" height="40" rx="20"/>
+          <text class="t" x="395" y="65" text-anchor="middle">held</text>
+          <rect class="box" x="40" y="270" width="130" height="44" rx="22"/>
+          <text class="t" x="105" y="289" text-anchor="middle">cancelled</text>
+          <text class="s" x="105" y="305" text-anchor="middle">also from held</text>
+          <rect class="box" x="880" y="270" width="130" height="44" rx="22"/>
+          <text class="t" x="945" y="289" text-anchor="middle">returned</text>
+          <text class="s" x="945" y="305" text-anchor="middle">hold payee, reissue</text>
+          <rect class="box dash" x="880" y="40" width="130" height="44" rx="4"/>
+          <text class="t" x="945" y="59" text-anchor="middle">adjustment item</text>
+          <text class="s" x="945" y="75" text-anchor="middle">new row, + or −</text>
+
+          <line class="ln c" x1="170" y1="170" x2="329" y2="170" marker-end="url(#shc)"/>
+          <text class="lbl c" x="250" y="162" text-anchor="middle">proof workflow: accepted</text>
+          <path class="ln c" d="M130,150 V60 H329" marker-end="url(#shc)"/>
+          <text class="lbl c" x="232" y="52" text-anchor="middle">proof-due deadline fires</text>
+          <line class="ln" x1="380" y1="150" x2="380" y2="81" marker-end="url(#sh)"/>
+          <text class="lbl" x="370" y="119" text-anchor="end">examiner or sanctions hit</text>
+          <line class="ln" x1="410" y1="80" x2="410" y2="149" marker-end="url(#sh)"/>
+          <text class="lbl" x="420" y="119">examiner releases</text>
+          <line class="ln" x1="460" y1="170" x2="619" y2="170" marker-end="url(#sh)"/>
+          <text class="lbl" x="540" y="162" text-anchor="middle">payment run takes it</text>
+          <line class="ln" x1="750" y1="170" x2="879" y2="170" marker-end="url(#sh)"/>
+          <text class="lbl" x="815" y="162" text-anchor="middle">bank acknowledges</text>
+          <text class="s" x="685" y="214" text-anchor="middle">only the payment run changes it;</text>
+          <text class="s" x="685" y="229" text-anchor="middle">a late hold becomes a recovery task</text>
+          <line class="ln" x1="945" y1="190" x2="945" y2="269" marker-end="url(#sh)"/>
+          <text class="lbl" x="963" y="234">returns file</text>
+          <line class="ln dash" x1="945" y1="150" x2="945" y2="85" marker-end="url(#sh)"/>
+          <text class="lbl" x="955" y="122">correction later</text>
+          <line class="ln" x1="105" y1="190" x2="105" y2="269" marker-end="url(#sh)"/>
+          <text class="lbl" x="88" y="234" text-anchor="end">claim closes</text>
+          <path class="ln" d="M360,190 V292 H171" marker-end="url(#sh)"/>
+          <text class="lbl" x="265" y="283" text-anchor="middle">claim closes</text>
+
+          <g class="mk hi"><circle cx="395" cy="115" r="9"/><text x="395" y="118.5" text-anchor="middle">7</text></g>
+          <g class="mk hi"><circle cx="105" cy="230" r="9"/><text x="105" y="233.5" text-anchor="middle">11</text></g>
+          <g class="mk lo"><circle cx="750" cy="150" r="9"/><text x="750" y="153.5" text-anchor="middle">13</text></g>
+          <g class="mk lo"><circle cx="945" cy="230" r="9"/><text x="945" y="233.5" text-anchor="middle">14</text></g>
+          <g class="mk hi"><circle cx="1010" cy="40" r="9"/><text x="1010" y="43.5" text-anchor="middle">10</text></g>
+        </svg>
+      </div>
+      <figcaption><span>Blue transitions are made by workflows, and every other writer is named on its arrow. Every change goes through this one state machine, which checks the current status first. Two rules carry most of the safety: nothing but the payment run touches an item that's in a run, and nothing edits a paid item.</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Checked every night</h2>
+      <p class="note">These checks don't prevent a failure. They make sure it shows up within a day instead of in a complaint to the Department of Insurance.</p>
+    </div>
+    <ul class="inv">
+      <li><span>Every claim in a state has the deadlines that state requires.</span><span class="catches">catches <span class="badge hi">1</span><span class="badge hi">15</span></span></li>
+      <li><span>No deadline is more than an hour overdue, and nothing stays dispatched for hours without finishing.</span><span class="catches">catches <span class="badge hi">2</span><span class="badge hi">6</span></span></li>
+      <li><span>No outbox row is more than an hour old.</span><span class="catches">catches <span class="badge hi">5</span></span></li>
+      <li><span>No document sits unmatched to a period for more than a day, and no proof waits past its review limit.</span><span class="catches">catches <span class="badge hi">8</span><span class="badge hi">12</span></span></li>
+      <li><span>Every hold has a review deadline, and every suspension has a letter.</span><span class="catches">catches <span class="badge hi">12</span><span class="badge hi">16</span></span></li>
+      <li><span>No item is paid for a period after the claim's end date or date of death.</span><span class="catches">catches <span class="badge hi">11</span></span></li>
+      <li><span>A sample of calculations, re-run, matches what was paid.</span><span class="catches">catches <span class="badge hi">9</span><span class="badge hi">10</span></span></li>
+      <li><span>Paid items match bank confirmations to the cent.</span><span class="catches">catches <span class="badge lo">13</span><span class="badge lo">14</span></span></li>
+      <li><span>No insured has two open claims for the same disability dates.</span><span class="catches">catches <span class="badge hi">21</span></span></li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(function () {
+  var P = 'people', S = 'state', D = 'deadlines', T = 'temporal', B = 'batch', E = 'external';
+
+  Swimlane.add('f1', {
+    aria: 'Letters vendor down: 42 status letter deadlines fire five days before the legal limit, workflows retry for four hours then fail and alert, ops switches to in-house print and re-runs the same workflows, and compliance confirms no letter passed the legal limit.',
+    phases: [
+      { n: 'Mon 09:00', c: '42 status letters due', w: 1.3 },
+      { n: '09:00 – 13:00', c: 'automatic retries', w: 1.3 },
+      { n: 'Mon 13:00', c: 'workflows give up', w: 1.3, tone: 'bad' },
+      { n: 'Mon 14:00', c: 'ops switches channel', w: 1.45 },
+      { n: 'Wednesday', c: 'vendor back', w: 1.3 }
+    ],
+    items: [
+      [P, 2, .5, 0, 'chip', 'on-call paged'],
+      [P, 3, .5, 0, 'chip', 'ops: use in-house print', 'po'],
+      [P, 4, .5, 0, 'chip', 'compliance checks log'],
+      [S, 2, .5, 0, 'chip', 'ops task opened'],
+      [S, 3, .5, 0, 'chip', 'letters logged with date'],
+      [S, 4, .5, 0, 'chip', 'none past legal limit'],
+      [D, 0, .5, 0, 'chip', 'fires 5 days before limit'],
+      [D, 0, .5, 1, 'due', 'status letters ×42', 'd0'],
+      [D, 2, .5, 0, 'chip', 'deadlines stay dispatched'],
+      [T, 0, .5, 0, 'wfD', 'status letter ×42', 'w0', 'd0'],
+      [T, 1, .5, 0, 'chip', 'retrying with backoff'],
+      [T, 2, .5, 0, 'fail', 'failed after 4 hours', 'wf'],
+      [T, 3, .5, 0, 'wfE', 're-run ×42, same IDs', 'w3', 'po'],
+      [E, 0, .5, 0, 'neg', 'letters vendor down', 'ev'],
+      [E, 3, .5, 0, 'chip', 'in-house print'],
+      [E, 4, .5, 0, 'chip', 'vendor back']
+    ],
+    marks: [{ on: 'wf', n: 6 }, { on: 'ev', n: 16 }]
+  });
+
+  Swimlane.add('f2', {
+    aria: 'Workers down overnight: workflows for 310 due deadlines queue in Temporal, the queue-wait alert pages on-call at 06:00, workers restart, and each workflow re-checks the claim so 12 skip and 298 send letters.',
+    phases: [
+      { n: 'Sun 22:00', c: 'workers stop', w: 1.2, tone: 'bad' },
+      { n: 'Overnight', c: 'deadlines come due', w: 1.4 },
+      { n: 'Mon 06:00', c: 'alert fires', w: 1.2 },
+      { n: 'Mon 06:20', c: 'workers back', w: 1.3 },
+      { n: '06:20 – 07:00', c: 'catch-up', w: 1.6 }
+    ],
+    items: [
+      [P, 2, .5, 0, 'chip', 'on-call paged', 'po'],
+      [P, 3, .5, 0, 'chip', 'restarts workers'],
+      [S, 4, .5, 0, 'chip', '12 skipped: proof came in'],
+      [S, 4, .5, 1, 'chip', '298 changes saved'],
+      [D, 1, .5, 0, 'chip', 'dispatcher keeps starting'],
+      [D, 1, .5, 1, 'due', '310 deadlines due', 'd1'],
+      [T, 0, .5, 0, 'fail', 'claims workers down', 'wf'],
+      [T, 1, .5, 0, 'chip', '310 workflows queued', 'tq'],
+      [T, 2, .5, 0, 'neg', 'queue wait over 60 min', 'ta'],
+      [T, 3, .5, 0, 'chip', 'workers take the queue'],
+      [T, 4, .5, 0, 'wfD', '310 run, re-check first', 'tr'],
+      [E, 4, .5, 0, 'chip', '298 letters sent']
+    ],
+    links: [{ a: 'd1', b: 'tq', style: 'fires' }, { a: 'ta', b: 'po', style: 'plain' }],
+    marks: [{ on: 'wf', n: 6 }, { on: 'ta', n: 2 }, { on: 'tr', n: 3, lvl: 'lo' }]
+  });
+
+  Swimlane.add('f3', {
+    aria: 'Bad calculation: a January rules release gets the cost-of-living increase wrong, 1,200 claims are paid wrongly for three months, a nightly sample recalculation finds it in April, a correction workflow per claim writes adjustment items, and underpayments are paid with interest while overpayments are offset.',
+    phases: [
+      { n: 'January', c: 'release with a bug', w: 1.3, tone: 'bad' },
+      { n: 'Jan – Mar', c: 'wrong amounts paid', w: 1.4, tone: 'bad' },
+      { n: 'April', c: 'a check finds it', w: 1.3 },
+      { n: 'April', c: 'fix and correction run', w: 1.5 },
+      { n: 'May', c: 'claimants made whole', w: 1.5 }
+    ],
+    items: [
+      [P, 0, .5, 0, 'chip', 'release approved'],
+      [P, 2, .5, 0, 'chip', 'ops: mismatch alert', 'pa'],
+      [P, 3, .5, 0, 'chip', 'compliance approves plan', 'pc'],
+      [S, 0, .5, 0, 'neg', 'rules v14: COLA bug', 's0'],
+      [S, 1, .5, 0, 'chip', '1,200 items cleared'],
+      [S, 2, .5, 0, 'chip', 'incident opened'],
+      [S, 3, .5, 0, 'chip', 'rules v15 · recalculate'],
+      [S, 3, .5, 1, 'chip', 'adjustment items', 's3'],
+      [S, 4, .5, 0, 'chip', 'underpaid: + interest'],
+      [S, 4, .5, 1, 'chip', 'overpaid: offset'],
+      [D, 1, .5, 0, 'done', 'proof due ×1,200'],
+      [T, 1, .5, 0, 'wfE', 'proof ×1,200'],
+      [T, 3, .5, 0, 'wfE', 'correction per claim', 'w3', 'pc'],
+      [B, 1, .5, 0, 'chip', 'payment runs'],
+      [B, 2, .5, 0, 'chip', 'nightly sample recalculation', 'bc'],
+      [B, 4, .5, 0, 'chip', 'payment run: adjustments'],
+      [E, 1, .5, 0, 'chip', 'bank'],
+      [E, 4, .5, 0, 'chip', 'letters explain']
+    ],
+    links: [{ a: 'bc', b: 'pa', style: 'plain' }],
+    marks: [{ on: 's0', n: 9 }, { on: 's3', n: 10 }]
+  });
+})();
+</script>
+</body>
+</html>

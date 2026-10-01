@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>With and Without Temporal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="claims-v2.css">
+<style>
+  .sidebyside { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr)); gap: 16px; }
+  .sidebyside .canvas svg { min-width: 560px; }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <nav class="pagenav" aria-label="Claims backend v2">
+    <span class="ver">V2</span>
+    <a href="temporal-explained-v2.html">Temporal, explained</a>
+    <a href="temporal-layers-v2.html">Layer by layer</a>
+    <a href="with-without-temporal-v2.html" aria-current="page">With vs without</a>
+    <a href="backend-architecture-v2.html">Architecture</a>
+    <a href="intake-to-decision-v2.html">Intake to decision</a>
+    <a href="disability-scenarios-v2.html">Disability scenarios</a>
+    <a href="failure-handling-v2.html">Failure handling</a>
+    <a href="product-change-v2.html">Product changes</a>
+  </nav>
+
+  <header>
+    <div class="eyebrow">Claims platform · Temporal explained · for the tech team</div>
+    <h1>With and Without Temporal</h1>
+    <p class="lede">One job, built two ways. On day 42 the examiner approves Sam's claim, and three things must follow: send the approval letter, start the premium waiver in policy admin, then close the open deadlines and create the first payment item. Everything else is the same on both sides. The only difference is what runs the job.</p>
+  </header>
+
+  <section>
+    <div class="head">
+      <h2>The same job, two ways</h2>
+      <p class="note">Numbers 1 to 5 are the job machinery. On the left we build and run each piece ourselves. On the right, the same five come from Temporal, which the platform team already runs.</p>
+    </div>
+    <div class="sidebyside">
+      <figure>
+        <div class="canvas">
+          <svg class="d" viewBox="0 0 640 600" role="img" aria-label="Without Temporal: the Claims API saves the decision and a job row in Postgres. Our job runner polls the jobs table every 2 seconds, runs the next step, saves the step, retries with backoff and re-claims jobs from crashed runners. A deadline cron with a lock turns due deadlines into jobs. A failed-job admin screen finds and re-runs stuck jobs. The runner calls the letters vendor and policy admin. Five pieces of machinery are ours to build and run.">
+            <defs>
+              <marker id="wa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="eb" x="20" y="24">WITHOUT TEMPORAL</text>
+            <text class="lbl" x="20" y="42">we build and run the job machinery</text>
+
+            <rect class="box" x="20" y="64" width="280" height="60" rx="4"/>
+            <text class="t" x="160" y="86" text-anchor="middle">Claims API</text>
+            <text class="s" x="160" y="103" text-anchor="middle">examiner approves: decision, status</text>
+            <text class="s" x="160" y="118" text-anchor="middle">and a job row, in one transaction</text>
+
+            <rect class="box pg" x="20" y="150" width="600" height="130" rx="6"/>
+            <text class="t" x="36" y="172">Postgres</text>
+            <rect class="cell" x="36" y="184" width="154" height="82" rx="3"/>
+            <text class="lbl" x="113" y="220" text-anchor="middle">claims, status,</text>
+            <text class="lbl" x="113" y="236" text-anchor="middle">deadlines</text>
+            <rect class="cell key" x="204" y="184" width="216" height="82" rx="3"/>
+            <text class="lbl" x="312" y="206" text-anchor="middle" style="font-weight: 600">jobs table</text>
+            <text class="s" x="312" y="224" text-anchor="middle">type · step · attempts</text>
+            <text class="s" x="312" y="240" text-anchor="middle">next try at · lease until</text>
+            <text class="s" x="312" y="256" text-anchor="middle">last error</text>
+            <rect class="cell" x="434" y="184" width="170" height="82" rx="3"/>
+            <text class="lbl" x="519" y="220" text-anchor="middle">idempotency keys</text>
+            <text class="s" x="519" y="236" text-anchor="middle">needed on both sides</text>
+
+            <rect class="box" x="20" y="310" width="280" height="112" rx="4"/>
+            <text class="t" x="36" y="332">Job runner</text>
+            <text class="s" x="36" y="351">polls every 2 s, claims due jobs</text>
+            <text class="s" x="36" y="367">runs the next step, saves the step</text>
+            <text class="s" x="36" y="383">error: attempts + 1, wait longer</text>
+            <text class="s" x="36" y="399">lease expired: another runner takes it</text>
+            <text class="s" x="36" y="415">too many failures: mark failed, alert</text>
+
+            <rect class="box" x="330" y="310" width="290" height="62" rx="4"/>
+            <text class="t" x="346" y="332">Deadline cron</text>
+            <text class="s" x="346" y="350">every minute, with a lock (ShedLock)</text>
+            <text class="s" x="346" y="365">turns due deadlines into jobs</text>
+
+            <rect class="box" x="330" y="384" width="290" height="62" rx="4"/>
+            <text class="t" x="346" y="406">Failed-job admin</text>
+            <text class="s" x="346" y="424">find, inspect and re-run jobs</text>
+            <text class="s" x="346" y="439">alert on stuck or failed jobs</text>
+
+            <rect class="box" x="20" y="480" width="170" height="34" rx="3"/>
+            <text class="lbl" x="105" y="502" text-anchor="middle">letters vendor</text>
+            <rect class="box" x="210" y="480" width="170" height="34" rx="3"/>
+            <text class="lbl" x="295" y="502" text-anchor="middle">policy admin</text>
+
+            <line class="ln" x1="260" y1="124" x2="260" y2="183" marker-end="url(#wa)"/>
+            <line class="ln" x1="240" y1="310" x2="240" y2="267" marker-end="url(#wa)"/>
+            <line class="ln" x1="100" y1="310" x2="100" y2="267" marker-end="url(#wa)"/>
+            <line class="ln" x1="380" y1="310" x2="380" y2="267" marker-end="url(#wa)"/>
+            <path class="ln" d="M330,414 H316 V267" marker-end="url(#wa)"/>
+            <line class="ln" x1="100" y1="422" x2="100" y2="479" marker-end="url(#wa)"/>
+            <line class="ln" x1="260" y1="422" x2="260" y2="479" marker-end="url(#wa)"/>
+
+            <g class="mk"><circle cx="420" cy="184" r="10" style="fill: var(--ink)"/><text x="420" y="188" text-anchor="middle" style="fill: var(--surface)">1</text></g>
+            <g class="mk"><circle cx="278" cy="310" r="10" style="fill: var(--ink)"/><text x="278" y="314" text-anchor="middle" style="fill: var(--surface)">2</text></g>
+            <g class="mk"><circle cx="300" cy="310" r="10" style="fill: var(--ink)"/><text x="300" y="314" text-anchor="middle" style="fill: var(--surface)">3</text></g>
+            <g class="mk"><circle cx="620" cy="310" r="10" style="fill: var(--ink)"/><text x="620" y="314" text-anchor="middle" style="fill: var(--surface)">4</text></g>
+            <g class="mk"><circle cx="620" cy="384" r="10" style="fill: var(--ink)"/><text x="620" y="388" text-anchor="middle" style="fill: var(--surface)">5</text></g>
+
+            <circle cx="30" cy="550" r="10" style="fill: var(--ink)"/>
+            <text class="lbl" x="48" y="554" style="font-weight: 600">1–5: machinery we build, test and run ourselves</text>
+            <text class="s" x="48" y="574">and the job code has to track its own step (see the code below)</text>
+          </svg>
+        </div>
+      </figure>
+
+      <figure>
+        <div class="canvas">
+          <svg class="d" viewBox="0 0 640 600" role="img" aria-label="With Temporal: the Claims API saves the decision and an outbox row in Postgres. Our outbox relay reads the row and asks the Temporal Service to start a workflow. The Temporal Service keeps each run's history, re-hands steps after a crash, retries with timeouts, runs the dispatcher on a Schedule and has a web UI. Our claims worker runs the three steps and calls the letters vendor, policy admin and Postgres. The same five pieces come from Temporal.">
+            <defs>
+              <marker id="ta2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="tc2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="eb c" x="20" y="24">WITH TEMPORAL</text>
+            <text class="lbl" x="20" y="42">our code is just the steps</text>
+
+            <rect class="box" x="20" y="64" width="280" height="60" rx="4"/>
+            <text class="t" x="160" y="86" text-anchor="middle">Claims API</text>
+            <text class="s" x="160" y="103" text-anchor="middle">examiner approves: decision, status</text>
+            <text class="s" x="160" y="118" text-anchor="middle">and an outbox row, in one transaction</text>
+
+            <rect class="box pg" x="20" y="150" width="600" height="130" rx="6"/>
+            <text class="t" x="36" y="172">Postgres</text>
+            <rect class="cell" x="36" y="184" width="154" height="82" rx="3"/>
+            <text class="lbl" x="113" y="220" text-anchor="middle">claims, status,</text>
+            <text class="lbl" x="113" y="236" text-anchor="middle">deadlines</text>
+            <rect class="cell" x="204" y="184" width="216" height="82" rx="3"/>
+            <text class="lbl" x="312" y="220" text-anchor="middle" style="font-weight: 600">outbox</text>
+            <text class="s" x="312" y="236" text-anchor="middle">event · started?</text>
+            <rect class="cell" x="434" y="184" width="170" height="82" rx="3"/>
+            <text class="lbl" x="519" y="220" text-anchor="middle">idempotency keys</text>
+            <text class="s" x="519" y="236" text-anchor="middle">needed on both sides</text>
+
+            <rect class="box" x="20" y="310" width="280" height="50" rx="4"/>
+            <text class="t" x="36" y="332">Outbox relay</text>
+            <text class="s" x="36" y="350">our code, about 30 lines</text>
+
+            <rect class="box tmp" x="20" y="378" width="280" height="68" rx="4"/>
+            <text class="t" x="36" y="400">Claims worker</text>
+            <text class="s" x="36" y="418">sendApprovalLetter → startWaiver</text>
+            <text class="s" x="36" y="434">→ closeDeadlinesAndCreateItems</text>
+
+            <rect class="box tmp" x="330" y="300" width="290" height="160" rx="4"/>
+            <text class="t" x="346" y="322">Temporal Service</text>
+            <text class="s" x="346" y="339">run by the platform team</text>
+            <circle cx="356" cy="359" r="9" style="fill: var(--cobalt)"/><text class="num" x="356" y="363" text-anchor="middle" style="fill: var(--surface); font-size: 10.5px">1</text>
+            <text class="s" x="372" y="363">history: each run's steps and results</text>
+            <circle cx="356" cy="381" r="9" style="fill: var(--cobalt)"/><text class="num" x="356" y="385" text-anchor="middle" style="fill: var(--surface); font-size: 10.5px">2</text>
+            <text class="s" x="372" y="385">task queue: re-hands steps after a crash</text>
+            <circle cx="356" cy="403" r="9" style="fill: var(--cobalt)"/><text class="num" x="356" y="407" text-anchor="middle" style="fill: var(--surface); font-size: 10.5px">3</text>
+            <text class="s" x="372" y="407">retries and timeouts, as settings</text>
+            <circle cx="356" cy="425" r="9" style="fill: var(--cobalt)"/><text class="num" x="356" y="429" text-anchor="middle" style="fill: var(--surface); font-size: 10.5px">4</text>
+            <text class="s" x="372" y="429">Schedule: every minute, no overlap</text>
+            <circle cx="356" cy="447" r="9" style="fill: var(--cobalt)"/><text class="num" x="356" y="451" text-anchor="middle" style="fill: var(--surface); font-size: 10.5px">5</text>
+            <text class="s" x="372" y="451">web UI: search, inspect, retry a run</text>
+
+            <rect class="box" x="20" y="480" width="170" height="34" rx="3"/>
+            <text class="lbl" x="105" y="502" text-anchor="middle">letters vendor</text>
+            <rect class="box" x="210" y="480" width="170" height="34" rx="3"/>
+            <text class="lbl" x="295" y="502" text-anchor="middle">policy admin</text>
+
+            <line class="ln" x1="260" y1="124" x2="260" y2="183" marker-end="url(#ta2)"/>
+            <line class="ln" x1="240" y1="310" x2="240" y2="267" marker-end="url(#ta2)"/>
+            <line class="ln c" x1="300" y1="335" x2="329" y2="335" marker-end="url(#tc2)"/>
+            <line class="ln c" x1="330" y1="400" x2="301" y2="400" marker-end="url(#tc2)"/>
+            <line class="ln c" x1="300" y1="426" x2="329" y2="426" marker-end="url(#tc2)"/>
+            <path class="ln" d="M20,412 H10 V225 H35" marker-end="url(#ta2)"/>
+            <line class="ln" x1="100" y1="446" x2="100" y2="479" marker-end="url(#ta2)"/>
+            <line class="ln" x1="260" y1="446" x2="260" y2="479" marker-end="url(#ta2)"/>
+
+            <circle cx="30" cy="550" r="10" style="fill: var(--cobalt)"/>
+            <text class="lbl" x="48" y="554" style="font-weight: 600">1–5: the same machinery, provided by Temporal</text>
+            <text class="s" x="48" y="574">we still build the relay, the steps, and idempotent outside calls</text>
+          </svg>
+        </div>
+      </figure>
+    </div>
+    <p class="note">What's identical on both sides: Postgres holds the claim, its status and its deadlines. The status changes in one transaction through the state machine. Outside calls carry idempotency keys. The daily payment run is the same.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>The same job in code</h2>
+      <p class="note">Sketches, to compare the shape. On the left, the job has to remember its own step and handle its own failures. On the right, those are settings.</p>
+    </div>
+    <div class="codepair two">
+      <div class="codecard">
+        <div class="eyebrow">Without Temporal · our job runner</div>
+<pre class="code"><span class="cm">// runs every 2 seconds on every API server</span>
+@Scheduled(fixedDelay = 2000)
+void runDueJobs() {
+  <span class="cm">// SKIP LOCKED, and a lease so a crashed</span>
+  <span class="cm">// runner's jobs are picked up again</span>
+  for (Job job : jobs.claimDue(50, Duration.ofMinutes(5))) {
+    try {
+      switch (job.step()) {
+        case 1 -&gt; { letters.sendApproval(job.claimId(), job.key("letter"));
+                    jobs.advance(job, 2); }
+        case 2 -&gt; { policyAdmin.startWaiver(job.claimId(), job.key("waiver"));
+                    jobs.advance(job, 3); }
+        case 3 -&gt; { claims.closeDeadlinesAndCreateItems(job.claimId());
+                    jobs.complete(job); }
+      }
+    } catch (Exception e) {
+      if (job.attempts() &gt;= 20) { jobs.fail(job, e); alerts.raise(job, e); }
+      else jobs.retryLater(job, backoff(job.attempts()), e);
+    }
+  }
+}
+<span class="cm">// plus: the jobs table and its migrations, backoff(),</span>
+<span class="cm">// per-call timeouts, the lease logic, the admin screen,</span>
+<span class="cm">// metrics and alerts, and tests for all of it</span></pre>
+      </div>
+      <div class="codecard">
+        <div class="eyebrow">With Temporal · a workflow</div>
+<pre class="code"><span class="cm">// Workflow ID: event-E-588, started by the outbox relay</span>
+public void run(String claimId) {
+  <span class="ac">act.sendApprovalLetter</span>(claimId);
+  <span class="ac">act.startPremiumWaiver</span>(claimId);
+  <span class="ac">act.closeDeadlinesAndCreateItems</span>(claimId);
+}
+
+<span class="cm">// retries and timeouts: set once for the activities</span>
+ActivityOptions.newBuilder()
+  .setStartToCloseTimeout(Duration.ofMinutes(2))
+  .setRetryOptions(RetryOptions.newBuilder()
+      .setInitialInterval(Duration.ofSeconds(1))
+      .setBackoffCoefficient(2.0)
+      .setMaximumInterval(Duration.ofMinutes(1))
+      .setMaximumAttempts(20)
+      .build())
+  .build();
+
+<span class="cm">// Rules for workflow code: no database calls, no clock,</span>
+<span class="cm">// no random numbers here. Those go in activities.</span>
+<span class="cm">// Temporal replays this method to resume it, so it</span>
+<span class="cm">// must make the same decisions every time.</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>The same bad day, both ways</h2>
+    </div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>What happens</th><th>Without Temporal</th><th>With Temporal</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">Policy admin is down for an hour</td><td class="dim">The runner catches the error, adds 1 to attempts and sets a later try time. Our backoff code decides the wait.</td><td>The activity's retry settings retry it. The run simply waits at that step.</td></tr>
+          <tr><td class="strong">A server dies just after the approval letter is sent</td><td class="dim">When the lease expires, another runner takes the job and resumes at the step saved in the jobs table. If the crash came before "step 2" was saved, the letter is sent again, unless the letters call has an idempotency key.</td><td>Another worker resumes from the history. A letter step that finished and was recorded isn't repeated. If the worker died during the call, the step runs again, so <strong>the letters call still needs an idempotency key</strong>.</td></tr>
+          <tr><td class="strong">The same job is started twice</td><td class="dim">A unique key on the jobs table</td><td>The workflow ID: the second start is refused</td></tr>
+          <tr><td class="strong">A job has been failing for 4 hours</td><td class="dim">Our alert on attempts or age fires. Someone opens our admin screen.</td><td>The run fails when its retries run out and Temporal's metrics alert. Someone opens the run in the web UI.</td></tr>
+          <tr><td class="strong">Support asks what happened to C-1042's approval</td><td class="dim">Read the job row, its last error, and search our logs</td><td>Search the web UI by claim ID: every step, with its input, output and error</td></tr>
+          <tr><td class="strong">Change how letters are retried</td><td class="dim">Change the runner's code and deploy</td><td>Change the activity's retry settings and deploy</td></tr>
+          <tr><td class="strong">Run the deadline dispatcher every minute</td><td class="dim">Spring's scheduler plus a lock, so only one server runs it</td><td>A Temporal Schedule. A run that would overlap the previous one is skipped.</td></tr>
+          <tr><td class="strong">Add a step to the job while jobs are mid-flight</td><td class="dim">Add a case to the switch. Jobs in flight pick up the new numbering, so steps must never be renumbered.</td><td>Add an activity call. Runs in flight finish on the old code, pinned to their build. New runs get the new code.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><h2>The trade, plainly</h2></div>
+    <div class="twocol">
+      <div>
+        <h3>Without Temporal</h3>
+        <ul>
+          <li>Nothing new to learn or depend on</li>
+          <li>We build, test and run five pieces of machinery, and keep them working for the life of the platform</li>
+          <li>Every job's code carries its own step tracking and error handling</li>
+          <li>Many teams do this successfully. It's a real option, just more of our own code.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>With Temporal</h3>
+        <ul>
+          <li>The five pieces come ready-made and are already run by the platform team</li>
+          <li>Job code is a plain list of steps</li>
+          <li>We depend on a shared platform, so payments don't use it (failure 17 on the failure page)</li>
+          <li>The team has to learn the workflow rules: no I/O, clock or randomness in workflow code</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

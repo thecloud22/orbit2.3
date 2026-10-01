@@ -1,0 +1,35 @@
+# Local development only. NOT verified in this repo (no Docker daemon was available when it was written).
+#
+#   docker compose -f docker/docker-compose.yml up -d
+#   SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+#
+# In real life we do not run Temporal: the organisation's platform team does, and we own a namespace and task queues on it.
+# The "temporal" service below is a single-process dev server (in-memory or SQLite, no durability) so the slice can run
+# on a laptop. Point TEMPORAL_TARGET / TEMPORAL_NAMESPACE / TEMPORAL_TASK_QUEUE at the org's cluster instead, and add
+# TLS or API-key options in TemporalConfig.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: claims
+      POSTGRES_USER: claims
+      POSTGRES_PASSWORD: claims
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - claims-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U claims -d claims"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  temporal:
+    image: temporalio/temporal:latest
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--namespace", "default"]
+    ports:
+      - "7233:7233"   # gRPC, what the app connects to
+      - "8233:8233"   # web UI
+
+volumes:
+  claims-pgdata:

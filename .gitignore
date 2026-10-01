@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# `./claims.sh demo`: pidfiles and logs
+.demo/
+
+# `./claims.sh pack`
+claims-*.tar.gz
+
+# Dependencies and local settings for the project skills
+.claude/skills/*/node_modules/
+.claude/settings.local.json
+
+# default output of web/scripts/shot.mjs
+web/shot.png

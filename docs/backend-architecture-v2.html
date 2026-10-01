@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claims Backend v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="claims-v2.css">
+
+</head>
+<body>
+<div class="wrap">
+  <nav class="pagenav" aria-label="Claims backend v2">
+    <span class="ver">V2</span>
+    <a href="temporal-explained-v2.html">Temporal, explained</a>
+    <a href="temporal-layers-v2.html">Layer by layer</a>
+    <a href="with-without-temporal-v2.html">With vs without</a>
+    <a href="backend-architecture-v2.html" aria-current="page">Architecture</a>
+    <a href="intake-to-decision-v2.html">Intake to decision</a>
+    <a href="disability-scenarios-v2.html">Disability scenarios</a>
+    <a href="failure-handling-v2.html">Failure handling</a>
+    <a href="product-change-v2.html">Product changes</a>
+  </nav>
+
+  <header>
+    <div class="eyebrow">Claims platform · backend · v2</div>
+    <h1>Claims Backend v2</h1>
+    <p class="lede">Postgres holds every fact and every deadline. Temporal, the platform other teams already run, runs short workflows that act on them: each is started by a deadline coming due or by something that happened, and finishes within minutes to days. Payments run as a daily batch that doesn't depend on Temporal.</p>
+  </header>
+
+  <section>
+    <div class="head"><h2>Components and how they talk</h2></div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 730" role="img" aria-label="Component diagram. The React app calls the Claims API, which saves state and an outbox row in Postgres in one transaction. An outbox relay starts event workflows in Temporal. A Temporal Schedule dispatches due deadlines from Postgres and starts deadline workflows. Claims workers run deadline workflows, event workflows and orchestrations, call outside systems, and write state changes and next deadlines back to Postgres. The daily payment run has its own scheduler, takes cleared payment items and sends a file to the bank.">
+          <defs>
+            <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <!-- outside systems -->
+          <text class="eb" x="580" y="52" text-anchor="end">OUTSIDE SYSTEMS</text>
+          <rect class="box pg" x="590" y="20" width="580" height="56" rx="6"/>
+          <rect class="box" x="604" y="32" width="128" height="32" rx="3"/><text class="lbl" x="668" y="52" text-anchor="middle">letters &amp; print</text>
+          <rect class="box" x="744" y="32" width="128" height="32" rx="3"/><text class="lbl" x="808" y="52" text-anchor="middle">policy admin</text>
+          <rect class="box" x="884" y="32" width="128" height="32" rx="3"/><text class="lbl" x="948" y="52" text-anchor="middle">records vendor</text>
+          <rect class="box" x="1024" y="32" width="132" height="32" rx="3"/><text class="lbl" x="1090" y="52" text-anchor="middle">sanctions list</text>
+
+          <!-- left column -->
+          <rect class="box" x="40" y="100" width="180" height="50" rx="4"/>
+          <text class="t" x="130" y="122" text-anchor="middle">Corporate SSO</text>
+          <text class="s" x="130" y="139" text-anchor="middle">OIDC</text>
+          <rect class="box" x="40" y="230" width="180" height="60" rx="4"/>
+          <text class="t" x="130" y="256" text-anchor="middle">React app</text>
+          <text class="s" x="130" y="274" text-anchor="middle">static build</text>
+          <rect class="box" x="40" y="440" width="180" height="60" rx="4"/>
+          <text class="t" x="130" y="466" text-anchor="middle">Object storage</text>
+          <text class="s" x="130" y="484" text-anchor="middle">S3 or Azure Blob</text>
+
+          <!-- Claims API -->
+          <rect class="box" x="300" y="230" width="200" height="76" rx="4"/>
+          <text class="t" x="400" y="256" text-anchor="middle">Claims API</text>
+          <text class="s" x="400" y="274" text-anchor="middle">Java 21 · Spring Boot</text>
+          <text class="s" x="400" y="291" text-anchor="middle">state machines, outbox relay</text>
+
+          <!-- Temporal -->
+          <rect class="zone" x="580" y="100" width="600" height="270" rx="6"/>
+          <text class="eb c" x="1164" y="122" text-anchor="end">TEMPORAL · SHARED PLATFORM · OUR NAMESPACE</text>
+          <rect class="box tmp" x="600" y="140" width="300" height="210" rx="4"/>
+          <text class="t" x="616" y="164">Claims workers</text>
+          <text class="s" x="616" y="182">each run pinned to the build it started on</text>
+          <rect class="pill" x="616" y="198" width="268" height="36" rx="18"/>
+          <text class="lbl c" x="750" y="221" text-anchor="middle">deadline workflows · minutes</text>
+          <rect class="pill" x="616" y="246" width="268" height="36" rx="18"/>
+          <text class="lbl c" x="750" y="269" text-anchor="middle">event workflows · minutes to hours</text>
+          <rect class="pill" x="616" y="294" width="268" height="36" rx="18"/>
+          <text class="lbl c" x="750" y="317" text-anchor="middle">orchestrations · hours to days</text>
+          <rect class="box tmp" x="940" y="140" width="220" height="86" rx="4"/>
+          <text class="t" x="1050" y="166" text-anchor="middle">Schedules</text>
+          <text class="s" x="1050" y="186" text-anchor="middle">deadline dispatcher, every minute</text>
+          <text class="s" x="1050" y="204" text-anchor="middle">reserves, re-screen jobs</text>
+
+          <!-- Postgres -->
+          <rect class="box pg" x="300" y="440" width="860" height="160" rx="6"/>
+          <text class="t" x="316" y="464">Postgres · system of record</text>
+          <rect class="cell" x="316" y="478" width="120" height="48" rx="3"/>
+          <text class="lbl" x="376" y="498" text-anchor="middle">outbox</text>
+          <text class="s" x="376" y="514" text-anchor="middle">events to start</text>
+          <rect class="cell" x="448" y="478" width="148" height="48" rx="3"/>
+          <text class="lbl" x="522" y="498" text-anchor="middle">state machines</text>
+          <text class="s" x="522" y="514" text-anchor="middle">claim · line · item</text>
+          <rect class="cell key" x="608" y="478" width="120" height="48" rx="3"/>
+          <text class="lbl" x="668" y="498" text-anchor="middle">payment items</text>
+          <text class="s" x="668" y="514" text-anchor="middle">the contract</text>
+          <rect class="cell" x="740" y="478" width="120" height="48" rx="3"/>
+          <text class="lbl" x="800" y="498" text-anchor="middle">documents</text>
+          <text class="s" x="800" y="514" text-anchor="middle">metadata</text>
+          <rect class="cell" x="872" y="478" width="140" height="48" rx="3"/>
+          <text class="lbl" x="942" y="498" text-anchor="middle">product config</text>
+          <text class="s" x="942" y="514" text-anchor="middle">rules, versioned</text>
+          <rect class="cell key" x="1024" y="478" width="120" height="48" rx="3"/>
+          <text class="lbl" x="1084" y="498" text-anchor="middle">deadlines</text>
+          <text class="s" x="1084" y="514" text-anchor="middle">every deadline</text>
+          <rect class="cell" x="316" y="538" width="120" height="48" rx="3"/>
+          <text class="lbl" x="376" y="558" text-anchor="middle">audit events</text>
+          <text class="s" x="376" y="574" text-anchor="middle">append-only</text>
+
+          <!-- payments -->
+          <rect class="box" x="300" y="640" width="260" height="60" rx="4"/>
+          <text class="t" x="430" y="666" text-anchor="middle">Payment run · daily</text>
+          <text class="s" x="430" y="684" text-anchor="middle">own scheduler, not Temporal</text>
+          <rect class="box" x="640" y="640" width="160" height="60" rx="4"/>
+          <text class="t" x="720" y="666" text-anchor="middle">Bank</text>
+          <text class="s" x="720" y="684" text-anchor="middle">files, returns</text>
+
+          <!-- edges -->
+          <line class="ln" x1="130" y1="230" x2="130" y2="151" marker-end="url(#aa)"/>
+          <text class="lbl" x="140" y="196">sign-in</text>
+          <line class="ln" x1="220" y1="260" x2="299" y2="260" marker-end="url(#aa)"/>
+          <text class="lbl" x="260" y="252" text-anchor="middle">REST</text>
+          <path class="ln" d="M300,290 H260 V470 H221" marker-end="url(#aa)"/>
+          <text class="lbl" x="252" y="390" text-anchor="end">documents</text>
+          <line class="ln" x1="400" y1="306" x2="400" y2="439" marker-end="url(#aa)"/>
+          <text class="lbl" x="408" y="370">state + outbox,</text>
+          <text class="lbl" x="408" y="385">one transaction</text>
+          <line class="ln c" x1="500" y1="268" x2="599" y2="268" marker-end="url(#ac)"/>
+          <text class="lbl c halo" x="550" y="242" text-anchor="middle">outbox relay</text>
+          <text class="lbl c halo" x="550" y="258" text-anchor="middle">starts workflow</text>
+          <line class="ln c" x1="940" y1="183" x2="901" y2="183" marker-end="url(#ac)"/>
+          <text class="lbl c" x="920" y="175" text-anchor="middle">starts</text>
+          <line class="ln c" x1="1084" y1="226" x2="1084" y2="477" marker-end="url(#ac)"/>
+          <text class="lbl c" x="1092" y="300">due deadlines</text>
+          <line class="ln c" x1="750" y1="140" x2="750" y2="77" marker-end="url(#ac)"/>
+          <text class="lbl c" x="758" y="94">activities, with retries</text>
+          <line class="ln c" x1="750" y1="350" x2="750" y2="439" marker-end="url(#ac)"/>
+          <text class="lbl c" x="758" y="392">state changes and next</text>
+          <text class="lbl c" x="758" y="407">deadlines, one transaction</text>
+          <line class="ln" x1="430" y1="640" x2="430" y2="601" marker-end="url(#aa)"/>
+          <text class="lbl" x="438" y="625">takes cleared items</text>
+          <line class="ln" x1="560" y1="670" x2="639" y2="670" marker-end="url(#aa)"/>
+          <text class="lbl" x="600" y="662" text-anchor="middle">file</text>
+
+          <!-- legend -->
+          <line class="ln c" x1="880" y1="662" x2="920" y2="662" marker-end="url(#ac)"/>
+          <text class="lbl" x="930" y="666">Temporal</text>
+          <line class="ln" x1="880" y1="688" x2="920" y2="688" marker-end="url(#aa)"/>
+          <text class="lbl" x="930" y="692">direct call or data access</text>
+        </svg>
+      </div>
+      <figcaption><span>Every arrow into Postgres saves state together with whatever must happen next: an outbox row or a deadline. That way nothing can be saved without its follow-up. The payment run and the bank never touch Temporal, so an outage on the shared platform can't stop payments.</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>How a deadline fires</h2>
+      <p class="note">Every deadline, from status letters to hold reviews, goes through the same six steps.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 470" role="img" aria-label="Sequence: the dispatcher selects due deadlines and marks them dispatched, then starts one deadline workflow per deadline with the deadline ID as workflow ID. The workflow re-checks claim state. If the deadline no longer applies it is marked skipped; otherwise the workflow sends the letter with retries, then saves the state change, the next deadline and marks this deadline done in one transaction. If it fails after retries, an alert fires and the deadline stays dispatched.">
+          <defs>
+            <marker id="qa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="qc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="qr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-risk" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <rect class="box pg" x="40" y="16" width="180" height="48" rx="4"/>
+          <text class="t" x="130" y="37" text-anchor="middle">Deadlines table</text>
+          <text class="s" x="130" y="54" text-anchor="middle">Postgres</text>
+          <rect class="box tmp" x="270" y="16" width="180" height="48" rx="4"/>
+          <text class="t" x="360" y="37" text-anchor="middle">Dispatcher</text>
+          <text class="s" x="360" y="54" text-anchor="middle">Temporal Schedule</text>
+          <rect class="box tmp" x="510" y="16" width="180" height="48" rx="4"/>
+          <text class="t" x="600" y="37" text-anchor="middle">Deadline workflow</text>
+          <text class="s" x="600" y="54" text-anchor="middle">ID = deadline ID</text>
+          <rect class="box pg" x="750" y="16" width="180" height="48" rx="4"/>
+          <text class="t" x="840" y="37" text-anchor="middle">Claim state</text>
+          <text class="s" x="840" y="54" text-anchor="middle">Postgres</text>
+          <rect class="box" x="980" y="16" width="180" height="48" rx="4"/>
+          <text class="t" x="1070" y="37" text-anchor="middle">Letters vendor</text>
+          <text class="s" x="1070" y="54" text-anchor="middle">outside</text>
+
+          <line class="life" x1="130" y1="64" x2="130" y2="452"/>
+          <line class="life" x1="360" y1="64" x2="360" y2="452"/>
+          <line class="life" x1="600" y1="64" x2="600" y2="452"/>
+          <line class="life" x1="840" y1="64" x2="840" y2="452"/>
+          <line class="life" x1="1070" y1="64" x2="1070" y2="452"/>
+
+          <line class="ln c" x1="360" y1="104" x2="131" y2="104" marker-end="url(#qc)"/>
+          <text class="lbl c halo" x="245" y="96" text-anchor="middle"><tspan class="num">1</tspan>  select due deadlines, mark dispatched</text>
+
+          <line class="ln c" x1="360" y1="152" x2="599" y2="152" marker-end="url(#qc)"/>
+          <text class="lbl c halo" x="480" y="130" text-anchor="middle"><tspan class="num">2</tspan>  start one workflow per deadline</text>
+          <text class="s halo" x="480" y="144" text-anchor="middle">a second start with the same ID is rejected</text>
+
+          <line class="ln c" x1="600" y1="196" x2="839" y2="196" marker-end="url(#qc)"/>
+          <text class="lbl c halo" x="720" y="188" text-anchor="middle"><tspan class="num">3</tspan>  re-check: does this still apply?</text>
+
+          <line class="ln c" x1="600" y1="244" x2="131" y2="244" marker-end="url(#qc)"/>
+          <text class="lbl c halo" x="365" y="236" text-anchor="middle"><tspan class="num">4a</tspan>  no longer applies: mark skipped, with the reason</text>
+
+          <line class="ln c" x1="600" y1="292" x2="1069" y2="292" marker-end="url(#qc)"/>
+          <text class="lbl c halo" x="835" y="284" text-anchor="middle"><tspan class="num">4b</tspan>  otherwise: send the letter, retrying with backoff</text>
+
+          <line class="ln c" x1="600" y1="352" x2="839" y2="352" marker-end="url(#qc)"/>
+          <text class="lbl c halo" x="720" y="330" text-anchor="middle"><tspan class="num">5</tspan>  state change + next deadline + this one done</text>
+          <text class="s halo" x="720" y="344" text-anchor="middle">one transaction</text>
+
+          <path class="ln r" d="M600,392 H640 V420 H601" marker-end="url(#qr)"/>
+          <text class="lbl r halo" x="652" y="410"><tspan class="num">6</tspan>  fails after retries: alert and ops task; the deadline stays dispatched</text>
+        </svg>
+      </div>
+      <figcaption><span>Steps 1 and 2 make each deadline fire exactly once, even if the dispatcher runs twice. Step 3 makes a late firing safe, for example after an outage. Step 5 makes the next deadline impossible to lose: it is written in the same transaction as the change that needs it.</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>How an event starts a workflow</h2>
+      <p class="note">Anything a person does, like uploading proof, recording a decision or closing a claim, goes through the outbox.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 330" role="img" aria-label="Sequence: the claimant uploads proof; the Claims API saves the document and an outbox row in one transaction; the outbox relay reads new rows and starts an event workflow with the event ID as workflow ID; the workflow calculates, clears the payment item and closes the chase deadlines in Postgres.">
+          <defs>
+            <marker id="ea" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="ec" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <rect class="box" x="40" y="16" width="180" height="48" rx="4"/>
+          <text class="t" x="130" y="37" text-anchor="middle">Claimant</text>
+          <text class="s" x="130" y="54" text-anchor="middle">portal or agent</text>
+          <rect class="box" x="270" y="16" width="180" height="48" rx="4"/>
+          <text class="t" x="360" y="37" text-anchor="middle">Claims API</text>
+          <text class="s" x="360" y="54" text-anchor="middle">Java service</text>
+          <rect class="box pg" x="510" y="16" width="180" height="48" rx="4"/>
+          <text class="t" x="600" y="37" text-anchor="middle">Postgres</text>
+          <text class="s" x="600" y="54" text-anchor="middle">state + outbox</text>
+          <rect class="box" x="750" y="16" width="180" height="48" rx="4"/>
+          <text class="t" x="840" y="37" text-anchor="middle">Outbox relay</text>
+          <text class="s" x="840" y="54" text-anchor="middle">in the Claims API</text>
+          <rect class="box tmp" x="980" y="16" width="180" height="48" rx="4"/>
+          <text class="t" x="1070" y="37" text-anchor="middle">Event workflow</text>
+          <text class="s" x="1070" y="54" text-anchor="middle">ID = event ID</text>
+
+          <line class="life" x1="130" y1="64" x2="130" y2="312"/>
+          <line class="life" x1="360" y1="64" x2="360" y2="312"/>
+          <line class="life" x1="600" y1="64" x2="600" y2="312"/>
+          <line class="life" x1="840" y1="64" x2="840" y2="312"/>
+          <line class="life" x1="1070" y1="64" x2="1070" y2="312"/>
+
+          <line class="ln" x1="130" y1="104" x2="359" y2="104" marker-end="url(#ea)"/>
+          <text class="lbl halo" x="245" y="96" text-anchor="middle"><tspan class="num">1</tspan>  uploads proof</text>
+          <line class="ln" x1="360" y1="152" x2="599" y2="152" marker-end="url(#ea)"/>
+          <text class="lbl halo" x="480" y="130" text-anchor="middle"><tspan class="num">2</tspan>  save document and outbox row</text>
+          <text class="s halo" x="480" y="144" text-anchor="middle">one transaction</text>
+          <line class="ln" x1="840" y1="196" x2="601" y2="196" marker-end="url(#ea)"/>
+          <text class="lbl halo" x="720" y="188" text-anchor="middle"><tspan class="num">3</tspan>  read new outbox rows</text>
+          <line class="ln c" x1="840" y1="240" x2="1069" y2="240" marker-end="url(#ec)"/>
+          <text class="lbl c halo" x="955" y="232" text-anchor="middle"><tspan class="num">4</tspan>  start, ID = event ID</text>
+          <line class="ln c" x1="1070" y1="288" x2="601" y2="288" marker-end="url(#ec)"/>
+          <text class="lbl c halo" x="835" y="280" text-anchor="middle"><tspan class="num">5</tspan>  calculate, clear the item, close the chase deadlines</text>
+        </svg>
+      </div>
+      <figcaption><span>If the API crashes after step 2, the relay still finds the row and starts the workflow. If the relay retries step 4, the event ID makes the second start a no-op. Nothing sends a signal to a long-running workflow, so there's no case where the workflow has already finished.</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head"><h2>Three kinds of workflow, all short</h2></div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Kind</th><th>Started by</th><th>Workflow ID</th><th>Lasts</th><th>Examples</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">Deadline workflow</td><td>The dispatcher, when an deadline comes due</td><td><code>deadline-&lt;id&gt;</code></td><td>Minutes</td><td class="dim">Status letter, reminder, proof due, hold review, open next period, definition change</td></tr>
+          <tr><td class="strong">Event workflow</td><td>The outbox relay, after something is saved</td><td><code>event-&lt;event id&gt;</code></td><td>Minutes to hours</td><td class="dim">Proof arrived, decision recorded, claim closed, payment returned, sanctions hit</td></tr>
+          <tr><td class="strong">Orchestration</td><td>A claim reaching a stage</td><td><code>orch-&lt;claim&gt;-&lt;stage&gt;</code></td><td>Hours to days</td><td class="dim">Intake checks, records vendor request, correction run, settlement with rollback</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">No workflow waits for weeks. Anything that needs to happen later is a deadline. That's why each run can stay pinned to the code build it started on, and why the long versioning section in v1 is no longer needed.</p>
+  </section>
+
+  <section>
+    <div class="head"><h2>What lives where</h2></div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Thing</th><th>Lives in</th><th>Why there</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">Claim, benefit line, payment item status</td><td>Postgres state machines</td><td class="dim">One place checks every change, whoever makes it</td></tr>
+          <tr><td class="strong">Every deadline</td><td>Postgres deadlines table</td><td class="dim">Examiners see it, compliance reports on it, and an extension is a row update with a reason</td></tr>
+          <tr><td class="strong">Work to do after a change</td><td>Postgres outbox</td><td class="dim">Saved in the same transaction as the change, so it can't be lost</td></tr>
+          <tr><td class="strong">Running the work, with retries</td><td>Temporal workflows</td><td class="dim">Retries, timeouts and a history of every action, on the shared platform</td></tr>
+          <tr><td class="strong">Products, rules, letters</td><td>Postgres product configuration, versioned</td><td class="dim">Pinned per benefit line, and changed without a deploy for most changes</td></tr>
+          <tr><td class="strong">Paying money</td><td>Daily payment run</td><td class="dim">Set-based, reconciled as one file, and independent of Temporal</td></tr>
+          <tr><td class="strong">Documents</td><td>Object storage, metadata in Postgres</td><td class="dim">Large files out of the database, facts in it</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Decisions in v2</h2></div>
+    <ul class="decisions">
+      <li><strong>Temporal stays</strong><span>It's an existing platform that other teams run. We use our own namespace and task queues.</span></li>
+      <li><strong>Deadlines are data</strong><span>Every deadline is a row in Postgres, not a Temporal timer.</span></li>
+      <li><strong>No long-running workflows</strong><span>Workflows last minutes to days. Continue-as-new and long-lived patches are not needed.</span></li>
+      <li><strong>Outbox for every event</strong><span>The API never starts a workflow directly. It writes an outbox row with the change.</span></li>
+      <li><strong>Payments don't depend on Temporal</strong><span>The payment run has its own scheduler and can be started by hand, so an outage on the shared platform can't stop payments.</span></li>
+      <li><strong>Java 21 and Spring Boot</strong><span>This is assumed, as in v1. With .NET the shape is the same.</span></li>
+    </ul>
+    <p class="src note">Earlier thinking is in v1: <code>backend-architecture-v1.md</code> and the v1 diagram pages.</p>
+  </section>
+</div>
+</body>
+</html>

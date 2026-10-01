@@ -1,0 +1,33 @@
+# Determinism guard. Temporal workflow code is replayed, so it must never read the clock, generate random
+# values, sleep or schedule work on its own. Workflows use Workflow.UtcNow / Workflow.NewGuid / Workflow.Random /
+# Workflow.DelayAsync / Workflow.WhenAnyAsync instead. Activities and the rest of the app may do I/O, but the same
+# rules are applied to the whole assembly so a call cannot slip into a workflow by accident: use the injected
+# TimeProvider for time, and put a `#pragma warning disable RS0030` with a reason where a real exception is needed.
+P:System.DateTime.Now;Use TimeProvider (activities) or Workflow.UtcNow (workflows)
+P:System.DateTime.UtcNow;Use TimeProvider (activities) or Workflow.UtcNow (workflows)
+P:System.DateTime.Today;Use TimeProvider (activities) or Workflow.UtcNow (workflows)
+P:System.DateTimeOffset.Now;Use TimeProvider (activities) or Workflow.UtcNow (workflows)
+P:System.DateTimeOffset.UtcNow;Use TimeProvider (activities) or Workflow.UtcNow (workflows)
+M:System.Guid.NewGuid();Workflows must use Workflow.NewGuid()
+M:System.Random.#ctor();Workflows must use Workflow.Random
+M:System.Random.#ctor(System.Int32);Workflows must use Workflow.Random
+P:System.Random.Shared;Workflows must use Workflow.Random
+M:System.Threading.Tasks.Task.Run(System.Action);Never start your own tasks in a workflow
+M:System.Threading.Tasks.Task.Run(System.Func{System.Threading.Tasks.Task});Never start your own tasks in a workflow
+M:System.Threading.Tasks.Task.Run``1(System.Func{``0});Never start your own tasks in a workflow
+M:System.Threading.Tasks.Task.Run``1(System.Func{System.Threading.Tasks.Task{``0}});Never start your own tasks in a workflow
+M:System.Threading.Tasks.Task.Delay(System.TimeSpan);Workflows must use Workflow.DelayAsync; elsewhere pass a TimeProvider
+M:System.Threading.Tasks.Task.Delay(System.TimeSpan,System.Threading.CancellationToken);Workflows must use Workflow.DelayAsync; elsewhere pass a TimeProvider
+M:System.Threading.Tasks.Task.Delay(System.Int32);Workflows must use Workflow.DelayAsync; elsewhere pass a TimeProvider
+M:System.Threading.Tasks.Task.Delay(System.Int32,System.Threading.CancellationToken);Workflows must use Workflow.DelayAsync; elsewhere pass a TimeProvider
+M:System.Threading.Tasks.Task.WhenAny(System.Threading.Tasks.Task[]);Workflows must use Workflow.WhenAnyAsync
+M:System.Threading.Tasks.Task.WhenAny``1(System.Threading.Tasks.Task{``0}[]);Workflows must use Workflow.WhenAnyAsync
+M:System.Threading.Tasks.Task.WhenAny(System.Collections.Generic.IEnumerable{System.Threading.Tasks.Task});Workflows must use Workflow.WhenAnyAsync
+M:System.Threading.Tasks.Task.WhenAny``1(System.Collections.Generic.IEnumerable{System.Threading.Tasks.Task{``0}});Workflows must use Workflow.WhenAnyAsync
+M:System.Threading.Tasks.Task.Yield();Workflows must not yield to the default scheduler
+M:System.Threading.Thread.Sleep(System.Int32);Never block or sleep in a workflow
+M:System.Threading.Thread.Sleep(System.TimeSpan);Never block or sleep in a workflow
+M:System.Threading.Tasks.Task.ConfigureAwait(System.Boolean);ConfigureAwait(false) escapes the workflow scheduler
+M:System.Threading.Tasks.Task`1.ConfigureAwait(System.Boolean);ConfigureAwait(false) escapes the workflow scheduler
+M:System.Threading.Tasks.ValueTask.ConfigureAwait(System.Boolean);ConfigureAwait(false) escapes the workflow scheduler
+M:System.Threading.Tasks.ValueTask`1.ConfigureAwait(System.Boolean);ConfigureAwait(false) escapes the workflow scheduler

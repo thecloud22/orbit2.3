@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Temporal Runs a Claim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="claims-v2.css">
+
+</head>
+<body>
+<div class="wrap">
+  <nav class="pagenav" aria-label="Claims backend v2">
+    <span class="ver">V2</span>
+    <a href="temporal-explained-v2.html" aria-current="page">Temporal, explained</a>
+    <a href="temporal-layers-v2.html">Layer by layer</a>
+    <a href="with-without-temporal-v2.html">With vs without</a>
+    <a href="backend-architecture-v2.html">Architecture</a>
+    <a href="intake-to-decision-v2.html">Intake to decision</a>
+    <a href="disability-scenarios-v2.html">Disability scenarios</a>
+    <a href="failure-handling-v2.html">Failure handling</a>
+    <a href="product-change-v2.html">Product changes</a>
+  </nav>
+
+  <header>
+    <div class="eyebrow">Claims platform · Temporal explained · example 1</div>
+    <h1>How Temporal Runs a Claim</h1>
+    <p class="lede">One clean disability claim, followed from Temporal's point of view. Sam Ortiz, a dentist, injures a hand and can't work. Sam files a claim, the evidence comes in on time, a medical consultant reviews it, and the examiner approves on day 42.</p>
+    <p class="bigidea">Temporal doesn't hold Sam's claim for 42 days. It runs <strong>seven short jobs</strong>, about a minute of work in total. Between them, the claim is just data in Postgres.</p>
+    <p class="note">For what starts each run, what the dispatcher is and who fires the 30-day and 60-day letters, see <a href="temporal-layers-v2.html">Temporal, Layer by Layer</a>.</p>
+  </header>
+
+  <section>
+    <div class="head"><h2>Seven words to know</h2></div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Word</th><th>What it is</th><th>In Sam's claim</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">Workflow</td><td>A piece of our Java code that runs a few steps in order. Temporal records each step, so the code carries on from where it was if a server dies part-way.</td><td class="dim">"Intake checks": find the policy, screen, create the claim, send letters</td></tr>
+          <tr><td class="strong">Activity</td><td>One step that touches something outside the workflow: a call to policy admin, a Postgres transaction, a letter. Temporal retries it if it fails.</td><td class="dim"><code>findPolicy</code>, <code>createClaim</code>, <code>sendLetters</code></td></tr>
+          <tr><td class="strong">Worker</td><td>Our Java process. It asks Temporal for work, runs the workflow and activity code, and reports back. We run several copies.</td><td class="dim">The claims worker, which runs every one of Sam's jobs</td></tr>
+          <tr><td class="strong">Temporal Service</td><td>The platform team's server. It stores what happened in each run and hands out the next step. It never calls our systems itself.</td><td class="dim">Stores the 12 events of Sam's intake</td></tr>
+          <tr><td class="strong">Workflow ID</td><td>A name we give each run. Temporal refuses to start a second run with the same name.</td><td class="dim"><code>orch-N-5531-intake</code> can only start once</td></tr>
+          <tr><td class="strong">Event history</td><td>Temporal's record of one run: started, step asked for, step finished with its result, done.</td><td class="dim">Used to resume after a crash, and to see what happened</td></tr>
+          <tr><td class="strong">Schedule</td><td>Temporal's timer for recurring work.</td><td class="dim">The deadline dispatcher, which runs every minute for all claims</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Who talks to whom</h2>
+      <p class="note">Five parts. The Temporal Service in the top right is the only one run by another team.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 370" role="img" aria-label="The Claims API saves the claim and an outbox row in Postgres, and its relay asks the Temporal Service to start a workflow. The claims worker asks the Temporal Service for work and reports each result; the service hands out the next step. The worker's activities write to Postgres and call outside systems.">
+          <defs>
+            <marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="pc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <rect class="box" x="60" y="40" width="240" height="70" rx="4"/>
+          <text class="t" x="180" y="66" text-anchor="middle">Claims API</text>
+          <text class="s" x="180" y="84" text-anchor="middle">our Java service</text>
+          <text class="s" x="180" y="100" text-anchor="middle">saves what people do</text>
+
+          <rect class="box tmp" x="760" y="30" width="380" height="122" rx="4"/>
+          <text class="t" x="776" y="54">Temporal Service</text>
+          <text class="s" x="776" y="72">run by the platform team</text>
+          <rect class="cell" x="776" y="86" width="170" height="52" rx="3"/>
+          <text class="lbl" x="861" y="107" text-anchor="middle">event history</text>
+          <text class="s" x="861" y="124" text-anchor="middle">every step, per run</text>
+          <rect class="cell" x="958" y="86" width="166" height="52" rx="3"/>
+          <text class="lbl" x="1041" y="107" text-anchor="middle">task queue: claims</text>
+          <text class="s" x="1041" y="124" text-anchor="middle">steps waiting to run</text>
+
+          <rect class="box pg" x="60" y="240" width="240" height="80" rx="4"/>
+          <text class="t" x="180" y="268" text-anchor="middle">Postgres</text>
+          <text class="s" x="180" y="286" text-anchor="middle">claims, deadlines, tasks,</text>
+          <text class="s" x="180" y="302" text-anchor="middle">outbox</text>
+
+          <rect class="box tmp" x="420" y="240" width="280" height="90" rx="4"/>
+          <text class="t" x="560" y="268" text-anchor="middle">Claims worker</text>
+          <text class="s" x="560" y="286" text-anchor="middle">our Java code: workflows</text>
+          <text class="s" x="560" y="302" text-anchor="middle">and activities</text>
+
+          <rect class="box" x="820" y="250" width="320" height="70" rx="4"/>
+          <text class="t" x="980" y="278" text-anchor="middle">Outside systems</text>
+          <text class="s" x="980" y="296" text-anchor="middle">policy admin, letters, records vendor</text>
+
+          <line class="ln" x1="180" y1="110" x2="180" y2="239" marker-end="url(#pa)"/>
+          <text class="lbl" x="190" y="170"><tspan class="num">1</tspan>  saves the claim notice</text>
+          <text class="lbl" x="190" y="186">and an outbox row</text>
+          <line class="ln c" x1="300" y1="75" x2="759" y2="75" marker-end="url(#pc)"/>
+          <text class="lbl c" x="530" y="66" text-anchor="middle"><tspan class="num">2</tspan>  relay: start workflow orch-N-5531-intake</text>
+          <path class="ln c" d="M600,240 V190 H860 V153" marker-end="url(#pc)"/>
+          <text class="lbl c" x="730" y="182" text-anchor="middle"><tspan class="num">3</tspan>  asks for work, reports each result</text>
+          <path class="ln c" d="M920,152 V212 H640 V239" marker-end="url(#pc)"/>
+          <text class="lbl c" x="780" y="230" text-anchor="middle"><tspan class="num">4</tspan>  hands out the next step</text>
+          <line class="ln" x1="420" y1="285" x2="301" y2="285" marker-end="url(#pa)"/>
+          <text class="lbl" x="360" y="277" text-anchor="middle">activities write</text>
+          <line class="ln" x1="700" y1="285" x2="819" y2="285" marker-end="url(#pa)"/>
+          <text class="lbl" x="760" y="277" text-anchor="middle">activities call</text>
+        </svg>
+      </div>
+      <figcaption><span>Temporal never reaches into our systems. Our worker asks for work, runs our code, and reports what happened. Temporal's job is to remember every step and hand out the next one. If a worker dies, another worker picks up the same run and carries on.</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Sam's claim, drawn to scale</h2>
+      <p class="note">Day 0 to day 48. Each numbered circle at the bottom is one Temporal run, and "took 20 s" after its name is how long that run lasted. Everything else happens in Postgres or with people.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1260 544" role="img" aria-label="Timeline of Sam's claim over 48 days. People: Sam submits on day 0, uploads forms on day 8, the physician's records arrive on day 13, the examiner accepts all evidence on day 16, the medical review is done on day 34 and the examiner approves on day 42. The claim status moves from gathering evidence to in review to approved. Deadlines: acknowledgement and two follow-ups are closed before they come due, the day-30 status letter fires, and the decision limit and day-60 status letter are closed by the approval. Temporal runs seven short jobs on days 0, 8, 13, 16, 30, 34 and 42, with nothing running for Sam's claim in between.">
+          <defs>
+            <marker id="ta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <g id="tk"><circle r="6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M0,-3.5 V0 H3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></g>
+            <g id="ok"><circle r="6" style="fill: var(--surface)" stroke="currentColor" stroke-width="1.4"/><path d="M-3,0 L-1,2.5 L3,-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+          </defs>
+
+          <!-- day axis -->
+          <text class="lbl" x="210" y="30" text-anchor="middle">day 0</text>
+          <text class="lbl" x="357" y="30" text-anchor="middle">7</text>
+          <text class="lbl" x="504" y="30" text-anchor="middle">14</text>
+          <text class="lbl" x="651" y="30" text-anchor="middle">21</text>
+          <text class="lbl" x="798" y="30" text-anchor="middle">28</text>
+          <text class="lbl" x="945" y="30" text-anchor="middle">35</text>
+          <text class="lbl" x="1092" y="30" text-anchor="middle">42</text>
+          <line class="laneline" x1="200" y1="40" x2="1230" y2="40"/>
+
+          <!-- guides from people to runs -->
+          <line class="ln guide" x1="210" y1="100" x2="210" y2="410"/>
+          <line class="ln guide" x1="378" y1="100" x2="378" y2="410"/>
+          <line class="ln guide" x1="483" y1="100" x2="483" y2="410"/>
+          <line class="ln guide" x1="546" y1="100" x2="546" y2="410"/>
+          <line class="ln guide" x1="840" y1="306" x2="840" y2="410"/>
+          <line class="ln guide" x1="924" y1="100" x2="924" y2="410"/>
+          <line class="ln guide" x1="1092" y1="100" x2="1092" y2="410"/>
+
+          <!-- people -->
+          <text class="t" x="24" y="98">People</text>
+          <text class="s" x="24" y="114">Sam, examiner</text>
+          <line class="laneline" x1="200" y1="100" x2="1230" y2="100"/>
+          <circle cx="210" cy="100" r="5" style="fill: var(--ink)"/>
+          <text class="lbl" x="204" y="86">Sam submits the claim</text>
+          <circle cx="378" cy="100" r="5" style="fill: var(--ink)"/>
+          <text class="lbl" x="378" y="122" text-anchor="middle">Sam uploads forms</text>
+          <circle cx="483" cy="100" r="5" style="fill: var(--ink)"/>
+          <text class="lbl" x="483" y="86" text-anchor="middle">physician's records arrive</text>
+          <circle cx="546" cy="100" r="5" style="fill: var(--ink)"/>
+          <text class="lbl" x="552" y="122">examiner accepts all evidence</text>
+          <circle cx="924" cy="100" r="5" style="fill: var(--ink)"/>
+          <text class="lbl" x="924" y="86" text-anchor="middle">medical review done</text>
+          <circle cx="1092" cy="100" r="5" style="fill: var(--ink)"/>
+          <text class="lbl" x="1092" y="122" text-anchor="middle">examiner approves</text>
+
+          <!-- claim status -->
+          <text class="t" x="24" y="164">Claim status</text>
+          <text class="s" x="24" y="180">in Postgres</text>
+          <rect class="track" x="210" y="158" width="334" height="22" rx="11"/>
+          <text class="tt" x="377" y="173" text-anchor="middle">gathering evidence</text>
+          <rect class="track" x="548" y="158" width="542" height="22" rx="11"/>
+          <text class="tt" x="819" y="173" text-anchor="middle">in review</text>
+          <rect class="track" x="1094" y="158" width="136" height="22" rx="11"/>
+          <text class="tt" x="1162" y="173" text-anchor="middle">approved</text>
+
+          <!-- deadlines -->
+          <text class="t" x="24" y="205">Deadlines</text>
+          <text class="s" x="24" y="220">rows in Postgres</text>
+          <text class="s" x="196" y="244" text-anchor="end">acknowledge by day 15</text>
+          <line class="ln dash" x1="216" y1="240" x2="525" y2="240" style="stroke: var(--rule)"/>
+          <use href="#ok" x="210" y="240" style="color: var(--ink-2)"/>
+          <text class="s" x="533" y="244">closed on day 0: letter sent</text>
+
+          <text class="s" x="196" y="266" text-anchor="end">forms follow-up, day 14</text>
+          <line class="ln" x1="210" y1="262" x2="372" y2="262"/>
+          <line class="ln dash" x1="384" y1="262" x2="504" y2="262" style="stroke: var(--rule)"/>
+          <use href="#ok" x="378" y="262" style="color: var(--ink-2)"/>
+          <text class="s" x="512" y="266">closed on day 8: forms arrived</text>
+
+          <text class="s" x="196" y="288" text-anchor="end">APS follow-up, day 14</text>
+          <line class="ln" x1="210" y1="284" x2="477" y2="284"/>
+          <line class="ln dash" x1="489" y1="284" x2="504" y2="284" style="stroke: var(--rule)"/>
+          <use href="#ok" x="483" y="284" style="color: var(--ink-2)"/>
+          <text class="s" x="512" y="288">closed on day 13: records arrived</text>
+
+          <text class="s" x="196" y="310" text-anchor="end">status letter, day 30</text>
+          <line class="ln" x1="210" y1="306" x2="834" y2="306"/>
+          <use href="#tk" x="840" y="306" style="color: var(--cobalt)"/>
+          <text class="lbl c" x="852" y="310">came due: run 5 sends the letter</text>
+
+          <text class="s" x="196" y="332" text-anchor="end">status letter, day 60</text>
+          <line class="ln" x1="846" y1="328" x2="1086" y2="328"/>
+          <line class="ln dash" x1="1098" y1="328" x2="1230" y2="328" style="stroke: var(--rule)"/>
+          <use href="#ok" x="1092" y="328" style="color: var(--ink-2)"/>
+
+          <text class="s" x="196" y="354" text-anchor="end">decision limit, day 46</text>
+          <line class="ln" x1="546" y1="350" x2="1086" y2="350"/>
+          <line class="ln dash" x1="1098" y1="350" x2="1176" y2="350" style="stroke: var(--rule)"/>
+          <line class="ln" x1="1176" y1="344" x2="1176" y2="356" style="stroke: var(--rule)"/>
+          <use href="#ok" x="1092" y="350" style="color: var(--ink-2)"/>
+          <text class="s" x="1104" y="342">both closed on day 42</text>
+
+          <text class="s" x="196" y="376" text-anchor="end">next period opens, day 121</text>
+          <line class="ln" x1="1092" y1="372" x2="1224" y2="372" marker-end="url(#ta)"/>
+
+          <!-- temporal -->
+          <text class="t" x="24" y="424">Temporal</text>
+          <text class="s" x="24" y="440">short runs</text>
+          <line class="laneline" x1="200" y1="420" x2="1230" y2="420"/>
+          <text class="s" x="693" y="414" text-anchor="middle" style="font-style: italic">nothing runs for Sam's claim here</text>
+          <circle cx="210" cy="420" r="10" style="fill: var(--cobalt)"/><text class="num" x="210" y="424" text-anchor="middle" style="fill: var(--surface); font-size: 11px">1</text>
+          <circle cx="378" cy="420" r="10" style="fill: var(--cobalt)"/><text class="num" x="378" y="424" text-anchor="middle" style="fill: var(--surface); font-size: 11px">2</text>
+          <circle cx="483" cy="420" r="10" style="fill: var(--cobalt)"/><text class="num" x="483" y="424" text-anchor="middle" style="fill: var(--surface); font-size: 11px">3</text>
+          <circle cx="546" cy="420" r="10" style="fill: var(--cobalt)"/><text class="num" x="546" y="424" text-anchor="middle" style="fill: var(--surface); font-size: 11px">4</text>
+          <circle cx="840" cy="420" r="10" style="fill: var(--surface); stroke: var(--cobalt); stroke-width: 2"/><text class="num" x="840" y="424" text-anchor="middle" style="fill: var(--cobalt); font-size: 11px">5</text>
+          <circle cx="924" cy="420" r="10" style="fill: var(--cobalt)"/><text class="num" x="924" y="424" text-anchor="middle" style="fill: var(--surface); font-size: 11px">6</text>
+          <circle cx="1092" cy="420" r="10" style="fill: var(--cobalt)"/><text class="num" x="1092" y="424" text-anchor="middle" style="fill: var(--surface); font-size: 11px">7</text>
+          <text class="lbl c" x="204" y="450">intake checks · took 20 s</text>
+          <text class="lbl c" x="378" y="468" text-anchor="middle">document · took 15 s</text>
+          <text class="lbl c" x="483" y="450" text-anchor="middle">document · took 12 s</text>
+          <text class="lbl c" x="546" y="468" text-anchor="middle">proof complete · took 8 s</text>
+          <text class="lbl c" x="840" y="450" text-anchor="middle">status letter · took 3 s</text>
+          <text class="lbl c" x="924" y="468" text-anchor="middle">review done · took 5 s</text>
+          <text class="lbl c" x="1092" y="450" text-anchor="middle">decision · took 12 s</text>
+          <!-- legend -->
+          <circle cx="216" cy="500" r="8" style="fill: var(--cobalt)"/>
+          <text class="lbl" x="232" y="504">started by something a person did (6 runs)</text>
+          <circle cx="560" cy="500" r="8" style="fill: var(--surface); stroke: var(--cobalt); stroke-width: 2"/>
+          <text class="lbl" x="576" y="504">started by a deadline coming due (1 run)</text>
+          <text class="lbl" x="880" y="504">"took 20 s": how long the run lasted</text>
+          <line class="ln" x1="210" y1="528" x2="250" y2="528"/>
+          <text class="lbl" x="258" y="532">deadline waiting</text>
+          <use href="#ok" x="440" y="528" style="color: var(--ink-2)"/>
+          <text class="lbl" x="454" y="532">closed before its due day: never fired</text>
+          <line class="ln dash" x1="720" y1="528" x2="760" y2="528" style="stroke: var(--rule)"/>
+          <text class="lbl" x="768" y="532">time it would have waited</text>
+          <use href="#tk" x="960" y="528" style="color: var(--cobalt)"/>
+          <text class="lbl" x="974" y="532">came due and fired</text>
+        </svg>
+      </div>
+      <figcaption><span>Seven runs in all. Six start because a person did something (runs 1, 2, 3, 4, 6 and 7): Sam, the physician's office, the examiner or the consultant. The dotted line from each one goes up to that person's action. One starts because a deadline came due (run 5, drawn hollow): the day-30 status letter, because the claim was still in review. Its dotted line goes up to the deadline row instead. The other deadlines were closed before they came due, so they never started anything. After approval, the "next period opens" deadline hands Sam's claim to the monthly benefit cycle.</span></figcaption>
+    </figure>
+
+    <h3>Reading the deadline rows</h3>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Deadline</th><th>Waits for</th><th>Written</th><th>What happened</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">Acknowledge by day 15</td><td class="dim">the acknowledgement letter</td><td class="dim">day 0, at set-up</td><td>The letter went out in the same run, so the row was closed straight away. Never fired.</td></tr>
+          <tr><td class="strong">Forms follow-up, day 14</td><td class="dim">Sam's claim forms</td><td class="dim">day 0</td><td>Forms arrived on day 8, so it was closed. The reminder never went out.</td></tr>
+          <tr><td class="strong">APS follow-up, day 14</td><td class="dim">the physician's records</td><td class="dim">day 0</td><td>Records arrived on day 13, one day before. Never fired.</td></tr>
+          <tr><td class="strong">Status letter, day 30</td><td class="dim">a decision</td><td class="dim">day 0</td><td><strong>Fired.</strong> No decision by day 30, so run 5 sent the status letter the state requires and wrote the next one.</td></tr>
+          <tr><td class="strong">Status letter, day 60</td><td class="dim">a decision</td><td class="dim">day 30, by run 5</td><td>Approved on day 42, so it was closed. Never fired.</td></tr>
+          <tr><td class="strong">Decision limit, day 46</td><td class="dim">the examiner's decision</td><td class="dim">day 16, when proof of loss was complete</td><td>Decided on day 42, four days early. Never fired. Had it fired, it would have alerted a supervisor.</td></tr>
+          <tr><td class="strong">Next period opens, day 121</td><td class="dim">nothing: it starts month 2</td><td class="dim">day 42, by the approval</td><td>Still waiting. The approval already created the first month's payment item (days 91 to 120). This row opens month 2 and starts the monthly cycle.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Only one of Sam's seven deadlines fired. Deadlines are safety nets: most are called off because the claim moved on before they came due.</p>
+  </section>
+
+  <section id="statuses">
+    <div class="head">
+      <h2>What happens when the status changes</h2>
+      <p class="note">Sam's claim moves through four statuses: Received, Gathering evidence, In review, Approved. Other claims can take the paths drawn in grey.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 316" role="img" aria-label="Claim statuses. Sam's path: Received, then Gathering evidence when intake checks pass, then In review when the last requirement is accepted, then Approved when the examiner approves, then On benefit when benefits start. Other paths: Received to Needs intake review when checks stop, and back to Gathering evidence; Gathering evidence to Pended when a requirement expires, and back when evidence arrives; In review back to Gathering evidence when more evidence is needed; In review to Denied.">
+          <defs>
+            <marker id="sa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="sc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <rect class="box tmp" x="40" y="120" width="150" height="40" rx="20"/>
+          <text class="t" x="115" y="145" text-anchor="middle">Received</text>
+          <rect class="box tmp" x="290" y="120" width="180" height="40" rx="20"/>
+          <text class="t" x="380" y="145" text-anchor="middle">Gathering evidence</text>
+          <rect class="box tmp" x="570" y="120" width="150" height="40" rx="20"/>
+          <text class="t" x="645" y="145" text-anchor="middle">In review</text>
+          <rect class="box tmp" x="820" y="120" width="150" height="40" rx="20"/>
+          <text class="t" x="895" y="145" text-anchor="middle">Approved</text>
+          <rect class="box dash" x="1060" y="120" width="120" height="40" rx="20"/>
+          <text class="t" x="1120" y="145" text-anchor="middle">On benefit</text>
+
+          <rect class="box" x="40" y="230" width="150" height="40" rx="20"/>
+          <text class="t" x="115" y="255" text-anchor="middle">Needs intake review</text>
+          <rect class="box" x="290" y="230" width="180" height="40" rx="20"/>
+          <text class="t" x="380" y="255" text-anchor="middle">Pended</text>
+          <rect class="box" x="570" y="230" width="150" height="40" rx="20" style="stroke: var(--risk)"/>
+          <text class="t" x="645" y="255" text-anchor="middle">Denied</text>
+
+          <line class="ln c" x1="190" y1="140" x2="289" y2="140" marker-end="url(#sc)" style="stroke-width: 2.5"/>
+          <text class="lbl c" x="240" y="104" text-anchor="middle">intake checks</text>
+          <text class="lbl c" x="240" y="119" text-anchor="middle">pass (run 1)</text>
+          <line class="ln c" x1="470" y1="140" x2="569" y2="140" marker-end="url(#sc)" style="stroke-width: 2.5"/>
+          <text class="lbl c" x="520" y="104" text-anchor="middle">last requirement</text>
+          <text class="lbl c" x="520" y="119" text-anchor="middle">accepted</text>
+          <line class="ln c" x1="720" y1="140" x2="819" y2="140" marker-end="url(#sc)" style="stroke-width: 2.5"/>
+          <text class="lbl c" x="770" y="104" text-anchor="middle">examiner</text>
+          <text class="lbl c" x="770" y="119" text-anchor="middle">approves</text>
+          <line class="ln dash" x1="970" y1="140" x2="1059" y2="140" marker-end="url(#sa)"/>
+          <text class="lbl" x="1015" y="104" text-anchor="middle">benefits</text>
+          <text class="lbl" x="1015" y="119" text-anchor="middle">start</text>
+
+          <path class="ln" d="M645,120 V84 H420 V119" marker-end="url(#sa)"/>
+          <text class="lbl" x="532" y="76" text-anchor="middle">consultant needs more records</text>
+          <line class="ln" x1="115" y1="160" x2="115" y2="229" marker-end="url(#sa)"/>
+          <text class="s" x="107" y="205" text-anchor="end">checks stop</text>
+          <path class="ln" d="M190,250 H250 V150 H289" marker-end="url(#sa)"/>
+          <text class="s" x="200" y="290">task resolved</text>
+          <line class="ln" x1="350" y1="160" x2="350" y2="229" marker-end="url(#sa)"/>
+          <text class="s" x="342" y="222" text-anchor="end">requirement expires</text>
+          <line class="ln" x1="410" y1="229" x2="410" y2="161" marker-end="url(#sa)"/>
+          <text class="s" x="418" y="222">evidence arrives</text>
+          <line class="ln" x1="645" y1="160" x2="645" y2="229" marker-end="url(#sa)"/>
+          <text class="s" x="653" y="222">examiner denies</text>
+
+          <text class="s" x="1180" y="255" text-anchor="end">Withdrawn is possible from any status before a decision.</text>
+          <text class="s" x="1180" y="272" text-anchor="end">Denied leads to reconsideration: scenario 6.</text>
+        </svg>
+      </div>
+      <figcaption><span>Blue boxes and thick arrows are Sam's path. The status is a column on the claim row in Postgres, and it changes only through the claim's state machine, never by Temporal on its own.</span></figcaption>
+    </figure>
+
+    <h3>Every status change takes the same four steps</h3>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 240" role="img" aria-label="Four steps of a status change, using Gathering evidence to In review: the examiner accepts the last requirement; the state machine checks the claim is in Gathering evidence and unchanged since the examiner opened it; one transaction changes the status, writes an audit event, marks the requirement accepted and writes an outbox row; follow-on work runs in Temporal. If the check fails, nothing changes and the examiner sees why.">
+          <defs>
+            <marker id="fa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="fc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <rect class="box" x="20" y="40" width="270" height="92" rx="4"/>
+          <text class="t" x="36" y="64">1 · Something asks</text>
+          <text class="s" x="36" y="86">Day 16: the examiner accepts the last</text>
+          <text class="s" x="36" y="102">requirement in the claims app. The API</text>
+          <text class="s" x="36" y="118">gets the request.</text>
+          <rect class="box" x="320" y="40" width="270" height="92" rx="4"/>
+          <text class="t" x="336" y="64">2 · The state machine checks</text>
+          <text class="s" x="336" y="86">Is the claim in Gathering evidence?</text>
+          <text class="s" x="336" y="102">Unchanged since the examiner opened it?</text>
+          <text class="s" x="336" y="118">Are all requirements now done?</text>
+          <rect class="box pg" x="620" y="40" width="270" height="92" rx="4"/>
+          <text class="t" x="636" y="64">3 · One Postgres transaction</text>
+          <text class="s" x="636" y="86">Status → In review · audit event</text>
+          <text class="s" x="636" y="102">requirement accepted · deadlines closed</text>
+          <text class="s" x="636" y="118">or written · outbox row for step 4</text>
+          <rect class="box tmp" x="920" y="40" width="260" height="92" rx="4"/>
+          <text class="t" x="936" y="64">4 · Follow-on work</text>
+          <text class="s" x="936" y="86">The outbox starts run 4 in Temporal.</text>
+          <text class="s" x="936" y="102">It writes the decision limit and</text>
+          <text class="s" x="936" y="118">creates the medical review task.</text>
+          <line class="ln" x1="290" y1="86" x2="319" y2="86" marker-end="url(#fa)"/>
+          <line class="ln" x1="590" y1="86" x2="619" y2="86" marker-end="url(#fa)"/>
+          <line class="ln c" x1="890" y1="86" x2="919" y2="86" marker-end="url(#fc)"/>
+          <rect class="box dash" x="320" y="172" width="270" height="50" rx="4" style="stroke: var(--risk)"/>
+          <text class="lbl r" x="336" y="193">Not allowed: nothing changes,</text>
+          <text class="s" x="336" y="210">and the examiner sees why</text>
+          <line class="ln r" x1="455" y1="132" x2="455" y2="171" marker-end="url(#fa)"/>
+          <text class="s" x="636" y="160">If step 3 fails, it rolls back completely:</text>
+          <text class="s" x="636" y="176">no status change without its audit event,</text>
+          <text class="s" x="636" y="192">deadlines and outbox row.</text>
+        </svg>
+      </div>
+      <figcaption><span>Steps 1 to 3 happen in the Claims API in well under a second. Temporal only appears in step 4, and only when there's work to do afterwards. When a workflow itself moves the status, as run 1 does from Received to Gathering evidence, the same steps 2 and 3 run inside one of its activities.</span></figcaption>
+    </figure>
+
+    <h3>What each status does</h3>
+    <div class="tablewrap">
+      <table class="min" style="min-width: 1080px">
+        <thead><tr><th>Status</th><th>Gets here when</th><th>On entry, written in Postgres</th><th>On entry, Temporal runs</th><th>While in this status</th><th>Leaves when</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">Received</td><td class="dim">Sam submits the claim (day 0)</td><td>Claim notice, audit event, outbox row</td><td><strong>Run 1</strong>, intake checks: find the policy, screen, check for a duplicate</td><td class="dim">Nothing waits here. It lasts seconds.</td><td>Checks pass → <strong>Gathering evidence</strong>. Checks stop → Needs intake review.</td></tr>
+          <tr><td class="strong">Gathering evidence</td><td class="dim">Run 1 creates the claim (day 0)</td><td>Claim, benefit line, 3 requirements, deadlines: acknowledge by day 15, two follow-ups for day 14, status letter for day 30</td><td>Still <strong>run 1</strong>: sends the acknowledgement and claim forms, then closes the acknowledge deadline</td><td class="dim">Each document that arrives starts a run (<strong>runs 2, 3</strong>): match it to its requirement, close its follow-up, give the examiner a task. The examiner accepts or rejects each requirement.</td><td>Last requirement accepted or waived → <strong>In review</strong>. A requirement expires and the examiner pends → Pended.</td></tr>
+          <tr><td class="strong">In review</td><td class="dim">The examiner accepts the last requirement (day 16)</td><td>Status, audit event, requirement accepted, outbox row</td><td><strong>Run 4</strong>: writes the decision limit (day 46) and creates the medical review task. <span class="dim">Postgres only, so it could be done in step 3 instead.</span></td><td class="dim">The status letter deadline fires on day 30 (<strong>run 5</strong>): letter sent, next one written for day 60. The consultant finishes the review (<strong>run 6</strong>, also Postgres only): the examiner gets the decision task.</td><td>Examiner approves → <strong>Approved</strong>. Denies → Denied. Needs more records → back to Gathering evidence.</td></tr>
+          <tr><td class="strong">Approved</td><td class="dim">The examiner approves (day 42)</td><td>Decision locked, status, audit event, outbox row</td><td><strong>Run 7</strong>: approval letter, premium waiver in policy admin, close the decision limit and day-60 status letter, create the first month's payment item, write "next period opens" for day 121</td><td class="dim">Nothing until benefits start on day 91. The first month is paid after it ends.</td><td>Benefits start → On benefit, where the monthly cycle takes over (see the scenarios page).</td></tr>
+          <tr><td class="strong">Needs intake review</td><td class="dim">Intake checks stop: no policy match, lapsed policy, possible duplicate, sanctions match</td><td>Status, intake task</td><td class="dim">None. The stopped run has already ended.</td><td class="dim">An intake specialist or compliance works the task.</td><td>Resolved → Gathering evidence. Not a valid claim → closed, with a letter.</td></tr>
+          <tr><td class="strong">Pended</td><td class="dim">A requirement expires and the examiner pends the claim</td><td>Status, notice logged, a new limit deadline</td><td>A deadline workflow sends the notice saying what's missing</td><td class="dim">Waiting for the missing evidence.</td><td>Evidence arrives → Gathering evidence or In review. The limit passes → decided on what's there.</td></tr>
+          <tr><td class="strong">Denied</td><td class="dim">The examiner denies</td><td>Decision locked, status, audit event, outbox row</td><td>Denial letter with the claimant's rights, open deadlines closed, reconsideration window written</td><td class="dim">Waiting to see if the claimant asks for reconsideration.</td><td>Claimant asks → Under reconsideration (scenario 6). The window ends → the file closes.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The pattern in every row: the status change and everything that must happen <em>with</em> it are saved together in one transaction. Anything that calls outside Postgres, like letters or policy admin, is done afterwards by a Temporal run, with retries.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Inside one run: the intake checks</h2>
+      <p class="note">Run 1, on day 0. On the left, the code we write. On the right, what Temporal writes down as it runs. The history is simplified: Temporal records a few more bookkeeping events.</p>
+    </div>
+    <div class="codepair">
+      <div class="codecard">
+        <div class="eyebrow">Our workflow code (Java)</div>
+<pre class="code"><span class="cm">// Workflow ID: orch-N-5531-intake</span>
+public void run(String noticeId) {
+  Policy policy = <span class="ac">act.findPolicy</span>(noticeId);
+      <span class="cm">// calls policy admin</span>
+  <span class="ac">act.screenSanctions</span>(policy.insured());
+      <span class="cm">// calls the sanctions list</span>
+  <span class="ac">act.checkForDuplicate</span>(policy.insured(), noticeId);
+      <span class="cm">// reads Postgres</span>
+  String claimId = <span class="ac">act.createClaim</span>(noticeId, policy);
+      <span class="cm">// one Postgres transaction: claim, benefit</span>
+      <span class="cm">// line, 3 requirements, first deadlines</span>
+  <span class="ac">act.sendLetters</span>(claimId);
+      <span class="cm">// acknowledgement and claim forms</span>
+}
+<span class="cm">// Blue lines are activities. Temporal records</span>
+<span class="cm">// each one and retries it if it fails. If a check</span>
+<span class="cm">// finds a problem, the real code opens a task</span>
+<span class="cm">// for a person and stops.</span></pre>
+      </div>
+      <div class="codecard">
+        <div class="eyebrow">Temporal's event history for this run</div>
+        <ol class="hist">
+          <li><span class="n">1</span><span class="tm">09:00:01</span><span>Workflow started <span class="res">· by the outbox relay</span></span></li>
+          <li><span class="n">2</span><span class="tm">09:00:01</span><span>findPolicy asked for</span></li>
+          <li><span class="n">3</span><span class="tm">09:00:03</span><span>findPolicy done <span class="res">· policy DI-77120, in force</span></span></li>
+          <li><span class="n">4</span><span class="tm">09:00:03</span><span>screenSanctions asked for</span></li>
+          <li><span class="n">5</span><span class="tm">09:00:05</span><span>screenSanctions done <span class="res">· no match</span></span></li>
+          <li><span class="n">6</span><span class="tm">09:00:05</span><span>checkForDuplicate asked for</span></li>
+          <li><span class="n">7</span><span class="tm">09:00:05</span><span>checkForDuplicate done <span class="res">· none</span></span></li>
+          <li><span class="n">8</span><span class="tm">09:00:05</span><span>createClaim asked for</span></li>
+          <li><span class="n">9</span><span class="tm">09:00:06</span><span>createClaim done <span class="res">· claim C-1042</span></span></li>
+          <li><span class="n">10</span><span class="tm">09:00:06</span><span>sendLetters asked for</span></li>
+          <li><span class="n">11</span><span class="tm">09:00:19</span><span>sendLetters done <span class="res">· 2 letters queued</span></span></li>
+          <li><span class="n">12</span><span class="tm">09:00:19</span><span>Workflow completed</span></li>
+        </ol>
+      </div>
+    </div>
+    <p class="note">The code reads like a plain list of steps with no retry loops and no saved progress. The history on the right is what makes that safe.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Why the history matters: three things that go wrong</h2>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 270" role="img" aria-label="Worker A runs findPolicy and Temporal records the result, then Worker A crashes during screenSanctions. After 30 seconds with no answer, Temporal hands the step to Worker B. Worker B rebuilds the run from the history without calling findPolicy again, runs screenSanctions and continues.">
+          <defs>
+            <marker id="ca" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="cc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <text class="t" x="24" y="66">Worker A</text>
+          <text class="t" x="24" y="146">Temporal</text>
+          <text class="s" x="24" y="162">event history</text>
+          <text class="t" x="24" y="230">Worker B</text>
+          <line class="laneline" x1="170" y1="100" x2="1190" y2="100"/>
+          <line class="laneline" x1="170" y1="190" x2="1190" y2="190"/>
+
+          <rect class="box tmp" x="180" y="130" width="160" height="40" rx="4"/><text class="lbl" x="260" y="155" text-anchor="middle">started</text>
+          <rect class="box tmp" x="350" y="130" width="160" height="40" rx="4"/><text class="lbl" x="430" y="155" text-anchor="middle">policy DI-77120 recorded</text>
+          <rect class="box tmp" x="520" y="130" width="160" height="40" rx="4"/><text class="lbl" x="600" y="155" text-anchor="middle">screening asked for</text>
+          <rect class="box" x="690" y="130" width="160" height="40" rx="4" style="stroke: var(--risk)"/><text class="lbl r" x="770" y="155" text-anchor="middle">30 s, no answer</text>
+          <rect class="box tmp" x="860" y="130" width="160" height="40" rx="4"/><text class="lbl" x="940" y="155" text-anchor="middle">screening asked again</text>
+          <rect class="box tmp" x="1030" y="130" width="160" height="40" rx="4"/><text class="lbl" x="1110" y="155" text-anchor="middle">no match, carry on</text>
+
+          <rect class="it chip" x="350" y="50" width="160" height="26" rx="3"/><text class="lbl" x="430" y="67" text-anchor="middle">runs findPolicy</text>
+          <rect class="it neg" x="520" y="50" width="160" height="26" rx="3"/><text class="lbl r" x="600" y="67" text-anchor="middle">crashes mid-screening</text>
+          <line class="ln" x1="430" y1="76" x2="430" y2="129" marker-end="url(#ca)"/>
+          <text class="s" x="438" y="110">reports result</text>
+
+          <rect class="it chip" x="690" y="214" width="330" height="26" rx="3"/><text class="lbl" x="855" y="231" text-anchor="middle">rebuilds from the history: findPolicy is not called again</text>
+          <rect class="it chip" x="1030" y="214" width="160" height="26" rx="3"/><text class="lbl" x="1110" y="231" text-anchor="middle">runs screenSanctions</text>
+          <line class="ln c" x1="770" y1="170" x2="770" y2="213" marker-end="url(#cc)"/>
+          <text class="s" x="778" y="204">hands the step to Worker B</text>
+          <line class="ln" x1="1110" y1="214" x2="1110" y2="171" marker-end="url(#ca)"/>
+        </svg>
+      </div>
+      <figcaption><span><strong>1 · A worker dies part-way.</strong> The policy lookup is already in the history, so Worker B doesn't call policy admin again. It reads the recorded answer and carries on from the screening. Without Temporal, we'd need our own table of "how far did intake get" and a job to resume it.</span></figcaption>
+    </figure>
+
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 120" role="img" aria-label="Policy admin is down: findPolicy fails at 09:00:02 and is retried after 1, 2, 4, 8, 16 and 32 seconds, then every minute. Try 17 works at 09:11:05 and the workflow continues.">
+          <line class="laneline" x1="60" y1="60" x2="1140" y2="60"/>
+          <text class="s" x="60" y="100" text-anchor="middle">0</text>
+          <text class="s" x="540" y="100" text-anchor="middle">5 min</text>
+          <text class="s" x="1020" y="100" text-anchor="middle">10 min</text>
+          <circle cx="60" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="61.6" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="64.8" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="71.2" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="84" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="109.6" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="160.8" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="256.8" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="352.8" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="448.8" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="544.8" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="640.8" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="736.8" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="832.8" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="928.8" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="1024.8" cy="60" r="5" style="fill: var(--risk)"/>
+          <circle cx="1120.8" cy="60" r="7" style="fill: var(--cobalt)"/>
+          <text class="lbl r" x="60" y="40">try 1 fails at 09:00:02</text>
+          <text class="lbl" x="560" y="40" text-anchor="middle">waits 1 s, 2 s, 4 s … then 1 minute between tries</text>
+          <text class="lbl c" x="1130" y="40" text-anchor="end">try 17 works at 09:11:05</text>
+        </svg>
+      </div>
+      <figcaption><span><strong>2 · Policy admin is down for 11 minutes.</strong> Temporal retries <code>findPolicy</code> on its own. The waits and the give-up time are settings on the activity, not code we write. If it's still failing after, say, 4 hours, the run fails and raises an alert (failure 6 on the failure page).</span></figcaption>
+    </figure>
+    <p class="note"><strong>3 · The relay tries to start intake twice</strong>, because it crashed just after starting it the first time. Temporal refuses the second start: a run named <code>orch-N-5531-intake</code> already exists. Sam gets one acknowledgement letter, not two.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Run 5: a deadline comes due</h2>
+      <p class="note">Day 30, 09:00. The claim is still in review, so the status letter the state requires has to go out.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 300" role="img" aria-label="The dispatcher, run by a Temporal Schedule every minute, finds deadline D-311 due for claim C-1042 and starts workflow deadline-D-311. The workflow checks the claim is still undecided, sends the status letter, then marks D-311 done and writes D-312 for day 60 in one transaction.">
+          <defs>
+            <marker id="da" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="dc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <rect class="box pg" x="35" y="16" width="190" height="48" rx="4"/>
+          <text class="t" x="130" y="37" text-anchor="middle">Deadlines table</text>
+          <text class="s" x="130" y="54" text-anchor="middle">Postgres</text>
+          <rect class="box tmp" x="285" y="16" width="190" height="48" rx="4"/>
+          <text class="t" x="380" y="37" text-anchor="middle">Dispatcher</text>
+          <text class="s" x="380" y="54" text-anchor="middle">Schedule, every minute</text>
+          <rect class="box tmp" x="535" y="16" width="190" height="48" rx="4"/>
+          <text class="t" x="630" y="37" text-anchor="middle">deadline-D-311</text>
+          <text class="s" x="630" y="54" text-anchor="middle">workflow</text>
+          <rect class="box pg" x="785" y="16" width="190" height="48" rx="4"/>
+          <text class="t" x="880" y="37" text-anchor="middle">Claim C-1042</text>
+          <text class="s" x="880" y="54" text-anchor="middle">Postgres</text>
+          <rect class="box" x="995" y="16" width="190" height="48" rx="4"/>
+          <text class="t" x="1090" y="37" text-anchor="middle">Letters vendor</text>
+          <text class="s" x="1090" y="54" text-anchor="middle">outside</text>
+          <line class="life" x1="130" y1="64" x2="130" y2="290"/>
+          <line class="life" x1="380" y1="64" x2="380" y2="290"/>
+          <line class="life" x1="630" y1="64" x2="630" y2="290"/>
+          <line class="life" x1="880" y1="64" x2="880" y2="290"/>
+          <line class="life" x1="1090" y1="64" x2="1090" y2="290"/>
+
+          <line class="ln c" x1="380" y1="104" x2="131" y2="104" marker-end="url(#dc)"/>
+          <text class="lbl c halo" x="255" y="96" text-anchor="middle"><tspan class="num">1</tspan>  due now? → D-311, status letter</text>
+          <line class="ln c" x1="380" y1="148" x2="629" y2="148" marker-end="url(#dc)"/>
+          <text class="lbl c halo" x="505" y="140" text-anchor="middle"><tspan class="num">2</tspan>  start deadline-D-311</text>
+          <line class="ln c" x1="630" y1="188" x2="879" y2="188" marker-end="url(#dc)"/>
+          <text class="lbl c halo" x="755" y="180" text-anchor="middle"><tspan class="num">3</tspan>  still undecided? yes</text>
+          <line class="ln c" x1="630" y1="228" x2="1089" y2="228" marker-end="url(#dc)"/>
+          <text class="lbl c halo" x="860" y="220" text-anchor="middle"><tspan class="num">4</tspan>  send the status letter</text>
+          <line class="ln c" x1="630" y1="272" x2="131" y2="272" marker-end="url(#dc)"/>
+          <text class="lbl c halo" x="380" y="264" text-anchor="middle"><tspan class="num">5</tspan>  D-311 done, D-312 written for day 60, one transaction</text>
+        </svg>
+      </div>
+      <figcaption><span>The dispatcher isn't about Sam's claim. It checks the deadlines table every minute for all claims and starts one small workflow for each deadline that's due. Step 3 matters: if the examiner had approved Sam's claim at 08:59, the workflow would find the claim decided, skip the letter and record why.</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Run 7: the examiner approves</h2>
+      <p class="note">Day 42, 15:20. A person's action becomes an event, and the event starts a workflow.</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 316" role="img" aria-label="The examiner approves claim C-1042. The Claims API locks the decision and writes outbox row E-588 in one transaction. The relay starts workflow event-E-588, which sends the approval letter, starts the premium waiver in policy admin, closes the open deadlines, creates payment items from day 91 and writes the first period-opens deadline.">
+          <defs>
+            <marker id="ea2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="ec2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="m-cob" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <rect class="box" x="20" y="16" width="200" height="48" rx="4"/>
+          <text class="t" x="120" y="37" text-anchor="middle">Examiner</text>
+          <text class="s" x="120" y="54" text-anchor="middle">claims app</text>
+          <rect class="box" x="260" y="16" width="200" height="48" rx="4"/>
+          <text class="t" x="360" y="37" text-anchor="middle">Claims API</text>
+          <text class="s" x="360" y="54" text-anchor="middle">with its outbox relay</text>
+          <rect class="box pg" x="500" y="16" width="200" height="48" rx="4"/>
+          <text class="t" x="600" y="37" text-anchor="middle">Postgres</text>
+          <text class="s" x="600" y="54" text-anchor="middle">claim, deadlines, items</text>
+          <rect class="box tmp" x="740" y="16" width="200" height="48" rx="4"/>
+          <text class="t" x="840" y="37" text-anchor="middle">event-E-588</text>
+          <text class="s" x="840" y="54" text-anchor="middle">workflow</text>
+          <rect class="box" x="980" y="16" width="200" height="48" rx="4"/>
+          <text class="t" x="1080" y="37" text-anchor="middle">Outside systems</text>
+          <text class="s" x="1080" y="54" text-anchor="middle">letters, policy admin</text>
+          <line class="life" x1="120" y1="64" x2="120" y2="306"/>
+          <line class="life" x1="360" y1="64" x2="360" y2="306"/>
+          <line class="life" x1="600" y1="64" x2="600" y2="306"/>
+          <line class="life" x1="840" y1="64" x2="840" y2="306"/>
+          <line class="life" x1="1080" y1="64" x2="1080" y2="306"/>
+
+          <line class="ln" x1="120" y1="104" x2="359" y2="104" marker-end="url(#ea2)"/>
+          <text class="lbl halo" x="240" y="96" text-anchor="middle"><tspan class="num">1</tspan>  approves claim C-1042</text>
+          <line class="ln" x1="360" y1="150" x2="599" y2="150" marker-end="url(#ea2)"/>
+          <text class="lbl halo" x="480" y="128" text-anchor="middle"><tspan class="num">2</tspan>  decision locked + outbox row E-588</text>
+          <text class="s halo" x="480" y="142" text-anchor="middle">one transaction</text>
+          <line class="ln c" x1="360" y1="194" x2="839" y2="194" marker-end="url(#ec2)"/>
+          <text class="lbl c halo" x="600" y="186" text-anchor="middle"><tspan class="num">3</tspan>  relay: start event-E-588</text>
+          <line class="ln c" x1="840" y1="236" x2="1079" y2="236" marker-end="url(#ec2)"/>
+          <text class="lbl c halo" x="960" y="228" text-anchor="middle"><tspan class="num">4</tspan>  approval letter, premium waiver</text>
+          <line class="ln c" x1="840" y1="290" x2="601" y2="290" marker-end="url(#ec2)"/>
+          <text class="lbl c halo" x="720" y="268" text-anchor="middle"><tspan class="num">5</tspan>  close deadlines, payment items</text>
+          <text class="s halo" x="720" y="282" text-anchor="middle">from day 91, "period opens"</text>
+        </svg>
+      </div>
+      <figcaption><span>The examiner's click only touches Postgres. The workflow does the follow-on work, retrying each outside call if it has to. If the letters vendor is down, the decision is still safely saved, and the letter goes out when the vendor is back.</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head"><h2>Every Temporal run in Sam's claim</h2></div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>#</th><th>When</th><th>Workflow ID</th><th>Started by</th><th class="num">Took</th><th>What it did</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td class="num">Day 0, 09:00</td><td><code>orch-N-5531-intake</code></td><td class="dim">Outbox, after Sam submitted</td><td class="num">20 s</td><td>Found policy DI-77120, screened, created claim C-1042 with 3 requirements, sent the acknowledgement and forms, wrote the first deadlines</td></tr>
+          <tr><td class="num">2</td><td class="num">Day 8, 14:10</td><td><code>event-E-501</code></td><td class="dim">Outbox, after Sam's upload</td><td class="num">15 s</td><td>Matched the claimant statement, authorization and job description to their requirements, closed the forms follow-up</td></tr>
+          <tr><td class="num">3</td><td class="num">Day 13, 11:30</td><td><code>event-E-512</code></td><td class="dim">Outbox, after the records vendor delivered</td><td class="num">12 s</td><td>Matched the physician's statement, closed the APS follow-up, gave the examiner a review task</td></tr>
+          <tr><td class="num">4</td><td class="num">Day 16, 10:05</td><td><code>event-E-520</code></td><td class="dim">Outbox, after the examiner accepted the evidence</td><td class="num">8 s</td><td>Marked proof of loss complete, wrote the decision limit for day 46, created a medical review task</td></tr>
+          <tr><td class="num">5</td><td class="num">Day 30, 09:00</td><td><code>deadline-D-311</code></td><td class="dim">The dispatcher, when the deadline came due</td><td class="num">3 s</td><td>Checked the claim was still undecided, sent the status letter, wrote the next one for day 60</td></tr>
+          <tr><td class="num">6</td><td class="num">Day 34, 16:40</td><td><code>event-E-560</code></td><td class="dim">Outbox, after the medical review was saved</td><td class="num">5 s</td><td>Recorded restrictions and limitations, created the examiner's decision task</td></tr>
+          <tr><td class="num">7</td><td class="num">Day 42, 15:20</td><td><code>event-E-588</code></td><td class="dim">Outbox, after the approval</td><td class="num">12 s</td><td>Sent the approval letter, started the premium waiver, closed open deadlines, created payment items from day 91, wrote "period opens"</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Seven runs, about 75 seconds of work across 42 days. Every run is tagged with the claim ID, so the Temporal web UI can list all seven for C-1042 and show each one's history.</p>
+  </section>
+
+  <section>
+    <div class="head"><h2>What Temporal does in this design, and what it doesn't</h2></div>
+    <div class="twocol">
+      <div>
+        <h3>Does</h3>
+        <ul>
+          <li>Runs each multi-step job to the end, even if a server dies part-way</li>
+          <li>Retries failing calls with backoff, using settings rather than code</li>
+          <li>Refuses a second run with the same workflow ID</li>
+          <li>Keeps a searchable history of every run, for support and audit</li>
+          <li>Runs the deadline dispatcher every minute</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Doesn't</h3>
+        <ul>
+          <li>Hold the claim. Postgres does.</li>
+          <li>Hold deadlines. The deadlines table does, so examiners and compliance can see them.</li>
+          <li>Wait for people. Tasks live in Postgres, and a finished task starts a new run.</li>
+          <li>Move money. The daily payment run does.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="note">Temporal could hold one workflow per claim for all 42 days, waiting on timers and messages. We chose short runs for two reasons: deadlines have to be visible and editable in Postgres, and code for long-running workflows is hard to change safely. The <a href="backend-architecture-v2.html">architecture page</a> has the full reasoning.</p>
+  </section>
+</div>
+</body>
+</html>

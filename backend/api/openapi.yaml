@@ -1,0 +1,1161 @@
+openapi: 3.1.0
+info:
+  title: Claims API (life claim slice)
+  version: 0.1.0
+  summary: Individual life, disability income and annuity claims. This version covers what one life claim, intake to payment, touches.
+  description: |
+    Derived from the React mock's `web/src/api` modules (their doc comments carry the verbs). Where the mock's shape is
+    unsuitable for a real API the difference is deliberate; the full list is in `backend/README.md` ("Deviations from the mock").
+
+    **Conventions**
+
+    * **Ids** are UUIDs. Claims also have a human `claimNumber` (`L-26-043310`), unique, filterable, never used in paths.
+    * **Money** is `{ "amount": "200000.00", "currency": "USD" }`: a decimal string with at most 2 decimals, never a JSON number.
+    * **Timestamps** are RFC 3339 in UTC (`2026-09-25T15:03:00Z`). Business dates (date of death, issue date) are plain dates.
+    * **Enum values** are snake_case, the same strings the database stores (and the deadline kinds in the architecture doc).
+    * **Idempotency**: POSTs that create something take an `Idempotency-Key` header (8 to 128 characters). A repeat with the
+      same key and body returns the resource it created (200, `Idempotent-Replayed: true`); the same key with a different body is 409.
+    * **Optimistic concurrency**: every mutable resource has a `version`, returned as its `ETag` (`"3"`). State-changing calls on
+      an existing resource require `If-Match`: missing is 428, stale is 412.
+    * **Errors** are `application/problem+json` (RFC 9457) with a stable machine-readable `code`.
+    * **Asynchrony**: the API commits and returns; workflows follow. A newly created claim is `received` until the intake
+      workflow has set it up. Poll `GET /claims/{id}` or `/claims/{id}/workflow-runs`.
+    * **Slice status**: every operation carries `x-slice-status`: `implemented` (built and tested in this repo) or
+      `contract-only` (specified so the shapes are settled, not built yet).
+    * **Authentication is not built.** The `X-Actor` header is a development placeholder for the acting user.
+  contact:
+    name: Claims platform team
+    email: claims-platform@example.com
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - { name: Claims, description: 'A claim, created from a life intake, and its state.' }
+  - { name: Requirements, description: 'The evidence a claim waits on.' }
+  - { name: Deadlines, description: 'Every service level and follow-up is a row here; a dispatcher fires the ones that come due.' }
+  - { name: Decisions, description: 'Locked, versioned decision records (contract only).' }
+  - { name: Payments, description: 'Payment items and payment runs (contract only).' }
+  - { name: Letters, description: 'Outbound letters and messages.' }
+  - { name: History, description: 'Append-only audit trail.' }
+  - { name: Work items, description: 'A person''s queue.' }
+  - { name: Workflow runs, description: 'What each Temporal workflow run did.' }
+
+security:
+  - bearerAuth: []
+
+paths:
+  /claims/life-intake:
+    post:
+      tags: [Claims]
+      operationId: createLifeClaim
+      summary: Create a claim from a life intake (notice of death)
+      description: |
+        One transaction saves the claim, parties, policy snapshot, benefit lines, requirements, the first deadline rows, history
+        and an outbox event, then returns `201` with the claim in status `received`. No workflow has run yet: the outbox relay
+        starts `orch-<claimNumber>-intake` afterwards. (Mock: `submitLifeIntake` does all of it inline.)
+      x-slice-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Actor'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifeIntakeRequest'
+      responses:
+        '201':
+          description: Created. `Location` is the claim.
+          headers:
+            Location: { schema: { type: string } }
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Claim' }
+        '200':
+          description: The same Idempotency-Key and body were already accepted; the claim it created.
+          headers:
+            Idempotent-Replayed: { schema: { type: string, const: 'true' } }
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Claim' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /claims:
+    get:
+      tags: [Claims]
+      operationId: listClaims
+      summary: List claims, newest first
+      description: Mock `listClaims(ownerId)` and `searchClaims(q)` (free-text search is not built).
+      x-slice-status: implemented
+      parameters:
+        - { name: owner, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/ClaimStatus' } }
+        - { name: family, in: query, schema: { $ref: '#/components/schemas/Family' } }
+        - { name: claimNumber, in: query, schema: { type: string, pattern: '^[LDA]-[0-9]{2}-[0-9]{6}$' } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: A page of claim summaries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/ClaimSummary' } }
+                  nextCursor: { type: [string, 'null'] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /claims/{claimId}:
+    parameters: [{ $ref: '#/components/parameters/ClaimId' }]
+    get:
+      tags: [Claims]
+      operationId: getClaim
+      summary: Get a claim
+      description: |
+        The resource is the claim's facts and state. The mock's presentation fields (`tags`, `facts`, `stage`, `clocks`, `nextStep`,
+        `summary`, `sections`, `exceptions`, `suggestions`) are projections, not stored state, and are not part of this resource;
+        `stage` derives from `status`, `clocks` from `deadlines`.
+      x-slice-status: implemented
+      responses:
+        '200':
+          description: The claim.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Claim' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /claims/{claimId}/requirements:
+    parameters: [{ $ref: '#/components/parameters/ClaimId' }]
+    get:
+      tags: [Requirements]
+      operationId: listClaimRequirements
+      summary: Requirements on a claim
+      description: Mock `listRequirements(claimId)`.
+      x-slice-status: implemented
+      responses:
+        '200':
+          description: All requirements, oldest first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RequirementList' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /requirements/{requirementId}:
+    parameters: [{ $ref: '#/components/parameters/RequirementId' }]
+    get:
+      tags: [Requirements]
+      operationId: getRequirement
+      summary: Get a requirement
+      description: One requirement, with its ETag for a later accept or waive.
+      x-slice-status: implemented
+      responses:
+        '200':
+          description: The requirement.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Requirement' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /requirements/{requirementId}:accept:
+    parameters: [{ $ref: '#/components/parameters/RequirementId' }]
+    post:
+      tags: [Requirements]
+      operationId: acceptRequirement
+      summary: Accept a requirement
+      description: |
+        Postgres only, one transaction: the requirement becomes `accepted`, its waiting follow-up deadline rows close without
+        firing, and if it was the last one, proof of loss is complete (status `in_review`, `decision_due` and `review_target`
+        rows written, a work item for the owner). Mock: `markReceived` / `satisfyRequirement`. The event workflow that would call
+        this when a document is classified is not built.
+      x-slice-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/Actor'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                satisfiedBy: { type: string, description: 'What satisfied it, shown on the requirement.' }
+      responses:
+        '200':
+          description: The accepted requirement.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Requirement' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /requirements/{requirementId}:waive:
+    parameters: [{ $ref: '#/components/parameters/RequirementId' }]
+    post:
+      tags: [Requirements]
+      operationId: waiveRequirement
+      summary: Waive a requirement, with a reason
+      description: Mock `waiveRequirement`. Same effects as accept. A reason is required (422 `reason_required`).
+      x-slice-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/Actor'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: The waived requirement.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Requirement' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /claims/{claimId}/deadlines:
+    parameters: [{ $ref: '#/components/parameters/ClaimId' }]
+    get:
+      tags: [Deadlines]
+      operationId: listClaimDeadlines
+      summary: Deadline rows for a claim
+      description: Mock `LifeFlow.deadlines` in `GET /claims/{id}/workflow`, split into its own resource.
+      x-slice-status: implemented
+      responses:
+        '200':
+          description: All rows, oldest first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeadlineList' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /deadlines:
+    get:
+      tags: [Deadlines]
+      operationId: listDeadlines
+      summary: Deadlines across claims (operations view)
+      description: What is open, overdue, or dispatched and stuck. Ordered by `dueAt`.
+      x-slice-status: implemented
+      parameters:
+        - { name: state, in: query, schema: { $ref: '#/components/schemas/DeadlineState' } }
+        - { name: kind, in: query, schema: { $ref: '#/components/schemas/DeadlineKind' } }
+        - { name: dueBefore, in: query, schema: { type: string, format: date-time } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        '200':
+          description: Deadline rows.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeadlineList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /deadlines/{deadlineId}:
+    parameters: [{ $ref: '#/components/parameters/DeadlineId' }]
+    get:
+      tags: [Deadlines]
+      operationId: getDeadline
+      summary: Get a deadline row
+      description: One deadline row, with its ETag for a later extension.
+      x-slice-status: implemented
+      responses:
+        '200':
+          description: The row.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Deadline' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /deadlines/{deadlineId}:extend:
+    parameters: [{ $ref: '#/components/parameters/DeadlineId' }]
+    post:
+      tags: [Deadlines]
+      operationId: extendDeadline
+      summary: Extend an open deadline, with a reason
+      description: A row update, not a new timer. `dueAt` moves, `originalDueAt` stays, the history records why.
+      x-slice-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/Actor'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newDueAt, reason]
+              properties:
+                newDueAt: { type: string, format: date-time }
+                reason: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: The extended row.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Deadline' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /claims/{claimId}/decisions:
+    parameters: [{ $ref: '#/components/parameters/ClaimId' }]
+    get:
+      tags: [Decisions]
+      operationId: listClaimDecisions
+      summary: Locked decision records, every version
+      description: Mock `listDecisions` (and `GET /claims/{id}/decisions?asOf=` in replay.ts, which becomes the `asOf` filter).
+      x-slice-status: contract-only
+      parameters:
+        - { name: asOf, in: query, description: Return the versions recorded at or before this instant., schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: Decisions, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Decision' } }
+                  nextCursor: { type: [string, 'null'] }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Decisions]
+      operationId: recordDecision
+      summary: Record a decision on a benefit line
+      description: |
+        Locks a new immutable version. Within the recorder's authority it creates the payment items (status `cleared`), closes
+        `decision_due` and `review_target`, skips the status-letter row and writes `payment_due`, all in one transaction, and
+        an outbox event starts the letters workflow. Above authority it returns `202` and opens an approval work item.
+        Mock: `recordDecision`. A correction is a new version that names the one it supersedes.
+      x-slice-status: contract-only
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Actor'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecordDecisionRequest' }
+      responses:
+        '201':
+          description: Decision recorded and locked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Decision' }
+        '202':
+          description: Above the recorder's authority; waiting for approval. No decision exists yet.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [approvalWorkItemId]
+                properties:
+                  approvalWorkItemId: { type: string, format: uuid }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /decisions/{decisionId}:
+    get:
+      tags: [Decisions]
+      operationId: getDecision
+      summary: Get one decision version
+      description: One immutable decision version.
+      x-slice-status: contract-only
+      parameters:
+        - { name: decisionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The decision.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Decision' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /claims/{claimId}/payment-items:
+    parameters: [{ $ref: '#/components/parameters/ClaimId' }]
+    get:
+      tags: [Payments]
+      operationId: listClaimPaymentItems
+      summary: Payment items for a claim
+      description: Mock `GET /claims/{id}/payments`. Items are the contract between claims and payments.
+      x-slice-status: contract-only
+      responses:
+        '200':
+          description: Items.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/PaymentItem' } }
+                  nextCursor: { type: [string, 'null'] }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /payment-items/{paymentItemId}:hold:
+    post:
+      tags: [Payments]
+      operationId: holdPaymentItem
+      summary: Hold a payment item
+      description: |
+        Only an item not yet in a run can be held. A hold that arrives after the item is `in_run` is 409 `item_in_run` and becomes a
+        recovery task instead; only the payment run touches an item in a run.
+      x-slice-status: contract-only
+      parameters:
+        - { name: paymentItemId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/Actor'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: The held item.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentItem' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /payment-runs:
+    get:
+      tags: [Payments]
+      operationId: listPaymentRuns
+      summary: Payment runs, newest first
+      description: The daily runs and any manual runs.
+      x-slice-status: contract-only
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Runs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/PaymentRun' } }
+                  nextCursor: { type: [string, 'null'] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      tags: [Payments]
+      operationId: startPaymentRun
+      summary: Start a payment run by hand
+      description: |
+        The daily run has its own scheduler and does not use Temporal; this is the manual trigger. It pays every `cleared` item due on
+        or before `runDate`. Idempotent per key.
+      x-slice-status: contract-only
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Actor'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [runDate]
+              properties:
+                runDate: { type: string, format: date }
+      responses:
+        '202':
+          description: The run was created and is building.
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentRun' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /payment-runs/{paymentRunId}:
+    get:
+      tags: [Payments]
+      operationId: getPaymentRun
+      summary: Get a payment run
+      description: One run with its totals and status.
+      x-slice-status: contract-only
+      parameters:
+        - { name: paymentRunId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The run.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentRun' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /claims/{claimId}/letters:
+    parameters: [{ $ref: '#/components/parameters/ClaimId' }]
+    get:
+      tags: [Letters]
+      operationId: listClaimLetters
+      summary: Outbound letters and messages
+      description: Mock `GET /claims/{id}/communications`, outbound only. Calls and inbound items are history events and documents.
+      x-slice-status: implemented
+      responses:
+        '200':
+          description: Newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Letter' } }
+                  nextCursor: { type: [string, 'null'] }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /claims/{claimId}/history:
+    parameters: [{ $ref: '#/components/parameters/ClaimId' }]
+    get:
+      tags: [History]
+      operationId: listClaimHistory
+      summary: Append-only history, newest first
+      description: Mock `listHistory`. Events are never edited or deleted.
+      x-slice-status: implemented
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: A page of events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/HistoryEvent' } }
+                  nextCursor: { type: [string, 'null'] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /work-items:
+    get:
+      tags: [Work items]
+      operationId: listWorkItems
+      summary: A person's queue
+      description: Mock `getQueue(ownerId)`, i.e. `GET /work-items?owner={id}&status=open`. Its `views` array is a client-side grouping and is not stored.
+      x-slice-status: implemented
+      parameters:
+        - { name: owner, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/WorkItemStatus' } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        '200':
+          description: Items, most urgent first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/WorkItem' } }
+                  nextCursor: { type: [string, 'null'] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /work-items/{workItemId}:complete:
+    post:
+      tags: [Work items]
+      operationId: completeWorkItem
+      summary: Mark a work item done
+      description: The mock completes items as a side effect of the action they point at (`completeWork`); the real API also lets a person do it directly.
+      x-slice-status: contract-only
+      parameters:
+        - { name: workItemId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: The completed item.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkItem' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /claims/{claimId}/workflow-runs:
+    parameters: [{ $ref: '#/components/parameters/ClaimId' }]
+    get:
+      tags: [Workflow runs]
+      operationId: listClaimWorkflowRuns
+      summary: What each workflow run did
+      description: |
+        Mock `LifeFlow.runs`. Written by the workflows' own activities, so the record and the state change it describes
+        commit together. `swimlane` rows and `serviceLevels` are projections and are not part of this resource.
+      x-slice-status: implemented
+      responses:
+        '200':
+          description: Runs, oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/WorkflowRun' } }
+                  nextCursor: { type: [string, 'null'] }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'The intended scheme (org identity provider). NOT enforced yet: the service is unauthenticated and trusts X-Actor. See the README, not built yet.'
+  headers:
+    ETag:
+      description: The resource's version, quoted. Send it back as `If-Match`.
+      schema: { type: string, examples: ['"3"'] }
+
+  parameters:
+    ClaimId: { name: claimId, in: path, required: true, schema: { type: string, format: uuid } }
+    RequirementId: { name: requirementId, in: path, required: true, schema: { type: string, format: uuid } }
+    DeadlineId: { name: deadlineId, in: path, required: true, schema: { type: string, format: uuid } }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: A client-generated unique key (for example a UUID), 8 to 128 characters.
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: The ETag from the last GET of this resource.
+      schema: { type: string, examples: ['"3"'] }
+    Actor:
+      name: X-Actor
+      in: header
+      required: false
+      description: Development placeholder for the acting user until authentication is built.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque; the `nextCursor` of the previous page.
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: The request could not be read (malformed JSON, bad header or cursor).
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    NotFound:
+      description: No such resource.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Conflict:
+      description: The request conflicts with the resource's state (`invalid_state`, `idempotency_key_reuse`, `deadline_not_open`, ...).
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    PreconditionFailed:
+      description: '`If-Match` is stale (`version_conflict`). Fetch the resource again.'
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    PreconditionRequired:
+      description: '`If-Match` is required (`precondition_required`).'
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Unprocessable:
+      description: Well formed but not valid (`validation_failed` with field errors, or a business-rule code such as `payee_shares_invalid`).
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code:
+          type: string
+          description: Stable, machine-readable. Clients branch on this, not on `detail`.
+          examples: [validation_failed, version_conflict, idempotency_key_reuse]
+        errors:
+          type: array
+          description: Field-level details for `validation_failed`.
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount: { type: string, pattern: '^[0-9]{1,13}(\.[0-9]{1,2})?$', examples: ['200000.00'] }
+        currency: { type: string, pattern: '^[A-Z]{3}$', examples: [USD] }
+
+    Family: { type: string, enum: [life, disability, annuity] }
+    ClaimStatus:
+      type: string
+      enum: [received, gathering_evidence, in_review, awaiting_approval, approved, closed]
+    DeadlineKind:
+      type: string
+      enum: [acknowledge_by, forms_by, first_contact_by, status_letter, requirement_follow_up, decision_due, review_target, payment_due]
+    DeadlineState:
+      type: string
+      description: open, then dispatched when the dispatcher starts its workflow, then done or skipped.
+      enum: [open, dispatched, done, skipped]
+    RequirementState:
+      type: string
+      enum: [requested, received, accepted, not_enough, waived, expired]
+    WorkItemStatus: { type: string, enum: [open, done, snoozed] }
+
+    PartyRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+
+    LifeIntakeRequest:
+      type: object
+      required: [caller, insured, death, policies, designation]
+      properties:
+        noticeReceivedAt: { type: string, format: date-time, description: When the call started. Defaults to the server clock. }
+        caller:
+          type: object
+          required: [name, contactBy, verifiedDateOfBirth, verifiedPolicyNumber]
+          properties:
+            name: { type: string, maxLength: 200 }
+            relationship: { type: string }
+            phone: { type: string }
+            email: { type: string }
+            contactBy:
+              type: array
+              uniqueItems: true
+              items: { type: string, enum: [email, text, phone, mail] }
+            verifiedDateOfBirth: { type: boolean, description: Both verification flags must be true (422 `identity_not_verified`). }
+            verifiedPolicyNumber: { type: boolean }
+            agentConsent: { type: boolean, default: false }
+            beneficiaryRef: { type: string, description: 'The ref of the designated beneficiary the caller is, if any.' }
+        insured:
+          type: object
+          required: [name, dateOfBirth]
+          properties:
+            name: { type: string }
+            dateOfBirth: { type: string, format: date }
+            ssnLast4: { type: string, pattern: '^[0-9]{4}$' }
+        death:
+          type: object
+          required: [dateOfDeath, manner]
+          properties:
+            dateOfDeath: { type: string, format: date }
+            placeOfDeath: { type: string }
+            manner: { type: string, enum: [natural, accident, pending] }
+            outsideUs: { type: boolean, default: false }
+            funeralHome: { type: string }
+        policies:
+          type: array
+          minItems: 1
+          description: The policies being claimed, as found in policy administration. Policy administration is re-checked by the intake workflow.
+          items:
+            type: object
+            required: [policyNumber, productCode, productName, issueDate, paidToDate, inForce, faceAmount]
+            properties:
+              policyNumber: { type: string }
+              productCode: { type: string }
+              productName: { type: string }
+              issueDate: { type: string, format: date }
+              paidToDate: { type: string, format: date }
+              inForce: { type: boolean }
+              lapsedOn: { type: [string, 'null'], format: date, description: Present exactly when `inForce` is false. }
+              faceAmount: { $ref: '#/components/schemas/Money' }
+              riders:
+                type: array
+                items:
+                  type: object
+                  required: [key, name, amount]
+                  properties:
+                    key: { type: string, examples: [adb] }
+                    name: { type: string }
+                    amount: { $ref: '#/components/schemas/Money' }
+        designation:
+          type: object
+          required: [date, beneficiaries]
+          properties:
+            date: { type: string, format: date }
+            source: { type: string }
+            beneficiaries:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [ref, name, kind, sharePercent]
+                properties:
+                  ref: { type: string, description: 'Client-chosen, unique within the request.' }
+                  name: { type: string }
+                  relationship: { type: string }
+                  kind: { type: string, enum: [primary, contingent] }
+                  sharePercent: { type: number, description: 'Percent. The living payees'' shares must add up to 100 (422 `payee_shares_invalid`).' }
+                  dateOfBirth: { type: string, format: date }
+                  diedOn: { type: string, format: date }
+                  diedSource: { type: string }
+                  contact:
+                    type: object
+                    properties:
+                      phone: { type: string }
+                      email: { type: string }
+                      address: { type: string }
+                      packet: { type: string, enum: [portal, mail] }
+        agent:
+          type: object
+          required: [name]
+          properties:
+            name: { type: string }
+            agency: { type: string }
+        otherClaimantsPossible: { type: boolean, default: false }
+
+    LifeDetails:
+      type: object
+      required: [kind, dateOfDeath, mannerOfDeath]
+      properties:
+        kind: { type: string, const: life }
+        dateOfDeath: { type: string, format: date }
+        placeOfDeath: { type: [string, 'null'] }
+        mannerOfDeath: { type: string, enum: [natural, accident, pending] }
+        deathOutsideUs: { type: boolean }
+        funeralHome: { type: [string, 'null'] }
+        callerPartyId: { type: string, format: uuid }
+        callerRelationship: { type: [string, 'null'] }
+        contactBy: { type: array, items: { type: string } }
+        agentConsent: { type: boolean }
+        otherClaimantsPossible: { type: boolean }
+        intakeChannel: { type: string, enum: [phone, portal, mail, agent] }
+
+    BenefitLine:
+      type: object
+      required: [id, policyNumber, kind, name, amount, status, productConfigVersion, version]
+      properties:
+        id: { type: string, format: uuid }
+        policyNumber: { type: string }
+        kind: { type: string, enum: [base, rider] }
+        parentLineId: { type: [string, 'null'], format: uuid }
+        riderKey: { type: [string, 'null'] }
+        name: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        status:
+          type: string
+          enum: [gathering_evidence, cause_pending, not_payable, ready_to_decide, approved, paid, denied, closed]
+        waitingOn: { type: [string, 'null'] }
+        productConfigVersion: { type: string, description: The product configuration version pinned to this line. }
+        version: { type: integer, format: int64 }
+
+    ClaimParty:
+      type: object
+      required: [partyId, name, role, payee]
+      properties:
+        partyId: { type: string, format: uuid }
+        name: { type: string }
+        role: { type: string, enum: [insured, owner, caller, claimant, beneficiary, agent_of_record, funeral_home] }
+        relationship: { type: [string, 'null'] }
+        beneficiaryKind: { type: [string, 'null'], enum: [primary, contingent, null] }
+        sharePercent: { type: [string, 'null'], description: 'Decimal string, for example "50.00".' }
+        payee: { type: boolean }
+        packetChannel: { type: [string, 'null'], enum: [portal, mail, null] }
+        accessNote: { type: [string, 'null'], description: 'For an agent of record or attorney: what they may see.' }
+        diedOn: { type: [string, 'null'], format: date }
+
+    Claim:
+      type: object
+      required: [id, claimNumber, family, productCode, status, routeReasons, team, noticedAt, insured, benefitLines, parties, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        claimNumber: { type: string, pattern: '^[LDA]-[0-9]{2}-[0-9]{6}$', examples: [L-26-043310] }
+        family: { $ref: '#/components/schemas/Family' }
+        productCode: { type: string }
+        status: { $ref: '#/components/schemas/ClaimStatus' }
+        track: { type: [string, 'null'], enum: [fast_track_life, standard_life, null], description: Null until the intake workflow has routed the claim. }
+        routeRule: { type: [string, 'null'], examples: [LF-01] }
+        routeReasons: { type: array, items: { type: string } }
+        ownerId: { type: [string, 'null'], format: uuid }
+        team: { type: string }
+        noticedAt: { type: string, format: date-time }
+        proofCompleteAt: { type: [string, 'null'], format: date-time }
+        closedAt: { type: [string, 'null'], format: date-time }
+        insured: { $ref: '#/components/schemas/PartyRef' }
+        details:
+          description: Family-specific facts. Only `life` exists in this slice.
+          oneOf:
+            - $ref: '#/components/schemas/LifeDetails'
+          discriminator:
+            propertyName: kind
+        benefitLines: { type: array, items: { $ref: '#/components/schemas/BenefitLine' } }
+        parties: { type: array, items: { $ref: '#/components/schemas/ClaimParty' } }
+        version: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ClaimSummary:
+      type: object
+      required: [id, claimNumber, family, productCode, status, insuredName, noticedAt, version]
+      properties:
+        id: { type: string, format: uuid }
+        claimNumber: { type: string }
+        family: { $ref: '#/components/schemas/Family' }
+        productCode: { type: string }
+        status: { $ref: '#/components/schemas/ClaimStatus' }
+        track: { type: [string, 'null'] }
+        ownerId: { type: [string, 'null'], format: uuid }
+        insuredName: { type: string }
+        noticedAt: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+
+    Requirement:
+      type: object
+      required: [id, claimId, key, name, purpose, from, state, requestedAt, followUpDays, followUpCount, version]
+      properties:
+        id: { type: string, format: uuid }
+        claimId: { type: string, format: uuid }
+        benefitLineId: { type: [string, 'null'], format: uuid }
+        key: { type: string, enum: [certificate, statement, primary_died_first, report, amended_certificate] }
+        name: { type: string }
+        purpose: { type: string, description: 'What it proves: "Proof of death", "Proof of claim".' }
+        from:
+          type: object
+          required: [label]
+          properties:
+            partyId: { type: [string, 'null'], format: uuid }
+            label: { type: string }
+            detail: { type: [string, 'null'] }
+        state: { $ref: '#/components/schemas/RequirementState' }
+        requestedAt: { type: string, format: date-time }
+        followUpDays: { type: integer, description: Days until the follow-up deadline fires; 0 means never chased. }
+        followUpCount: { type: integer }
+        lastReminderAt: { type: [string, 'null'], format: date-time }
+        receivedAt: { type: [string, 'null'], format: date-time }
+        acceptedAt: { type: [string, 'null'], format: date-time }
+        satisfiedBy: { type: [string, 'null'] }
+        waivedAt: { type: [string, 'null'], format: date-time }
+        waiveReason: { type: [string, 'null'] }
+        version: { type: integer, format: int64 }
+    RequirementList:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Requirement' } }
+        nextCursor: { type: [string, 'null'] }
+
+    Deadline:
+      type: object
+      required: [id, claimId, kind, what, dueAt, originalDueAt, state, attempt, fired, version]
+      properties:
+        id: { type: string, format: uuid }
+        claimId: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/DeadlineKind' }
+        requirementId: { type: [string, 'null'], format: uuid }
+        what: { type: string }
+        sla: { type: [string, 'null'], description: 'The service level this row enforces: ack, forms, contact, status, decide, review, pay.' }
+        dueAt: { type: string, format: date-time }
+        originalDueAt: { type: string, format: date-time }
+        extensionReason: { type: [string, 'null'] }
+        state: { $ref: '#/components/schemas/DeadlineState' }
+        attempt: { type: integer, description: Dispatch attempts so far. }
+        dispatchedAt: { type: [string, 'null'], format: date-time }
+        fired: { type: boolean, description: True when it came due and a deadline workflow ran for it. }
+        lastOutcome: { type: [string, 'null'], enum: [started, already_started, start_failed, completed, skipped, closed_early, null] }
+        lastError: { type: [string, 'null'] }
+        workflowId: { type: [string, 'null'], examples: ['deadline-3f2b...'] }
+        closedAt: { type: [string, 'null'], format: date-time }
+        closedBy: { type: [string, 'null'], enum: [workflow, intake, requirement, decision, user, null] }
+        result: { type: [string, 'null'] }
+        version: { type: integer, format: int64 }
+    DeadlineList:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Deadline' } }
+        nextCursor: { type: [string, 'null'] }
+
+    RecordDecisionRequest:
+      type: object
+      required: [benefitLineId, outcome, basis]
+      properties:
+        benefitLineId: { type: string, format: uuid }
+        outcome: { type: string, enum: [approve, approve_in_part, deny] }
+        basis: { type: string, minLength: 1 }
+        supersedesId: { type: string, format: uuid, description: Set to correct an earlier decision; creates the next version. }
+
+    Decision:
+      type: object
+      required: [id, claimId, benefitLineId, version, outcome, outcomeText, basis, recordedAt, recordedBy, authorityNote]
+      description: Immutable. Never updated or deleted; a correction is a new version.
+      properties:
+        id: { type: string, format: uuid }
+        claimId: { type: string, format: uuid }
+        benefitLineId: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        supersedesId: { type: [string, 'null'], format: uuid }
+        outcome: { type: string, enum: [approved, approved_in_part, denied, closed] }
+        outcomeText: { type: string }
+        basis: { type: string }
+        evidence: { type: array, items: { type: string } }
+        provisions: { type: array, items: { type: string } }
+        recordedAt: { type: string, format: date-time }
+        recordedBy: { type: string, format: uuid }
+        authorityNote: { type: string }
+        approvedBy: { type: [string, 'null'], format: uuid }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        letterTemplate: { type: [string, 'null'] }
+
+    PaymentItem:
+      type: object
+      required: [id, claimId, benefitLineId, kind, payeePartyId, basis, principal, interest, amount, method, payOn, status, version]
+      properties:
+        id: { type: string, format: uuid }
+        claimId: { type: string, format: uuid }
+        benefitLineId: { type: string, format: uuid }
+        decisionId: { type: [string, 'null'], format: uuid }
+        kind: { type: string, enum: [benefit, adjustment] }
+        adjustsItemId: { type: [string, 'null'], format: uuid, description: 'For an adjustment, the item it corrects. Paid items are never edited.' }
+        payeePartyId: { type: string, format: uuid }
+        basis: { type: string }
+        principal: { $ref: '#/components/schemas/Money' }
+        interest: { $ref: '#/components/schemas/Money' }
+        amount: { $ref: '#/components/schemas/Money' }
+        method: { type: string, enum: [eft, check] }
+        payOn: { type: string, format: date }
+        status: { type: string, enum: [awaiting_proof, cleared, in_run, paid, held, cancelled, returned] }
+        holdReason: { type: [string, 'null'] }
+        runId: { type: [string, 'null'], format: uuid }
+        paidAt: { type: [string, 'null'], format: date-time }
+        version: { type: integer, format: int64 }
+
+    PaymentRun:
+      type: object
+      required: [id, runDate, status, trigger, itemCount, total, startedAt]
+      properties:
+        id: { type: string, format: uuid }
+        runDate: { type: string, format: date }
+        status: { type: string, enum: [building, sent, reconciled, failed] }
+        trigger: { type: string, enum: [schedule, manual] }
+        itemCount: { type: integer }
+        total: { $ref: '#/components/schemas/Money' }
+        fileReference: { type: [string, 'null'] }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+
+    Letter:
+      type: object
+      required: [id, claimId, templateCode, channel, recipientLabel, subject, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        claimId: { type: string, format: uuid }
+        benefitLineId: { type: [string, 'null'], format: uuid }
+        templateCode: { type: string, examples: [ACK-LIFE-01] }
+        channel: { type: string, enum: [letter, email, sms, portal, fax] }
+        recipientPartyId: { type: [string, 'null'], format: uuid }
+        recipientLabel: { type: string }
+        subject: { type: string }
+        summary: { type: [string, 'null'] }
+        status: { type: string, enum: [draft, queued, sent, failed] }
+        sentAt: { type: [string, 'null'], format: date-time }
+        workflowId: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    HistoryEvent:
+      type: object
+      required: [id, claimId, occurredAt, recordedAt, type, title, actorKind, actor]
+      properties:
+        id: { type: string, format: uuid }
+        claimId: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time, description: When it happened on the claim. }
+        recordedAt: { type: string, format: date-time, description: When we wrote it. }
+        type: { type: string, enum: [decision, data, document, communication, task, access, assistant, payment] }
+        title: { type: string }
+        actorKind: { type: string, enum: [user, system, workflow, batch, portal], description: Structured actor; the mock packed this into a free-text `actor` string. }
+        actor: { type: string }
+        detail: { type: [string, 'null'] }
+        ref: { type: [string, 'null'] }
+        workflowId: { type: [string, 'null'] }
+
+    WorkItem:
+      type: object
+      required: [id, claimId, priority, action, why, dueOn, waitingOn, section, status, version]
+      properties:
+        id: { type: string, format: uuid }
+        ownerId: { type: [string, 'null'], format: uuid, description: Null for a team-queue item nobody has picked up. }
+        claimId: { type: string, format: uuid }
+        priority: { type: integer, enum: [1, 2, 3] }
+        action: { type: string }
+        why: { type: string }
+        dueOn: { type: string, format: date }
+        waitingOn: { type: string }
+        flag: { type: [string, 'null'] }
+        section: { type: string, description: 'Claim section the item points at: workflow, requirements, decision, ...' }
+        status: { $ref: '#/components/schemas/WorkItemStatus' }
+        version: { type: integer, format: int64 }
+
+    RunStep:
+      type: object
+      required: [label, detail, system, state]
+      properties:
+        label: { type: string }
+        detail: { type: string }
+        system: { type: string, description: The system the step talks to. }
+        state: { type: string, enum: [done, retried, skipped] }
+
+    WorkflowRun:
+      type: object
+      required: [id, workflowId, runId, type, name, startedBy, status, startedAt, steps, saved]
+      properties:
+        id: { type: string, format: uuid }
+        workflowId: { type: string, examples: ['orch-L-26-043310-intake', 'deadline-3f2b...', 'event-...'] }
+        runId: { type: string, description: Temporal's run id. }
+        type: { type: string, enum: [orchestration, event, deadline] }
+        name: { type: string }
+        claimId: { type: [string, 'null'], format: uuid }
+        startedBy: { type: string }
+        triggerKind: { type: [string, 'null'], enum: [outbox_event, deadline, null] }
+        triggerId: { type: [string, 'null'], format: uuid }
+        status: { type: string, enum: [running, completed, skipped, needs_review, failed] }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        steps: { type: array, items: { $ref: '#/components/schemas/RunStep' } }
+        saved: { type: array, items: { type: string }, description: 'What the run wrote back to Postgres, in one transaction.' }
+        error: { type: [string, 'null'] }

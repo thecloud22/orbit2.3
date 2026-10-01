@@ -1,0 +1,30 @@
+/* Distributions section — prefixed .ds-. */
+.ds { display: flex; flex-direction: column; gap: 20px; container-type: inline-size; container-name: ds; min-width: 0; }
+.ds-head { flex-wrap: wrap; row-gap: 6px; }
+.ds-pair { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@container ds (max-width: 720px) { .ds-pair { grid-template-columns: minmax(0, 1fr); } }
+.ds-scroll { overflow-x: auto; }
+.ds-bn td { vertical-align: top; }
+.ds-bn td:first-child, .ds-bn td:nth-child(4) { white-space: nowrap; }
+.ds-missing { display: inline-flex; flex-direction: column; gap: 3px; align-items: flex-start; max-width: 190px; }
+
+.ds-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@container ds (max-width: 720px) { .ds-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ds-option { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+.ds-option--na { background: var(--sunken); color: var(--ink-3); }
+.ds-option--na strong { color: var(--ink-3); }
+.ds-elect { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; background: var(--sunken); border-radius: var(--radius); }
+.ds-elect .sub { min-width: 220px; }
+
+.ds-note { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; }
+.ds-note p { line-height: 1.5; font-size: 12.5px; }
+
+.ds-blocked { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: var(--caution-bg); border-radius: var(--radius); }
+.ds-fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.ds-choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); cursor: pointer; }
+.ds-choice input { margin-top: 3px; }
+.ds-choice--on { border-color: var(--accent); background: var(--accent-tint); }
+.ds-choice--na { background: var(--sunken); color: var(--ink-3); cursor: not-allowed; }
+.ds-fieldset:disabled .ds-choice { cursor: default; }
+.ds-choice-detail { display: block; margin-top: 4px; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+.ds-check { display: flex; gap: 8px; align-items: center; font-weight: 600; }

@@ -1,0 +1,65 @@
+/* Contestable review — neutral: differences are questions for Underwriting. */
+.ct { container-type: inline-size; display: flex; flex-direction: column; gap: 18px; }
+.ct-frame { line-height: 1.45; }
+
+/* ---------- Timeline ---------- */
+.ct-timeline { border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 10px; }
+.ct-tl-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ct-tl-bar { overflow: clip; overflow-clip-margin: 10px; position: relative; height: 6px; margin: 6px 6px 0; border-radius: 3px; background: repeating-linear-gradient(90deg, #D7D3F0 0 6px, transparent 6px 9px), var(--special-bg); }
+.ct-tl-elapsed { position: absolute; left: 0; top: 0; bottom: 0; background: var(--special-ink); border-radius: 3px; opacity: .55; }
+.ct-tl-dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--surface); border: 2px solid var(--ink-2); }
+.ct-tl-dot--death { border-color: var(--special-ink); background: var(--special-ink); }
+.ct-tl-labels { position: relative; height: 38px; }
+.ct-tl-labels li { position: absolute; top: 0; display: flex; flex-direction: column; gap: 1px; white-space: nowrap; font-size: 12.5px; }
+.ct-tl-labels .is-start { left: 0; }
+.ct-tl-labels .is-death { transform: translateX(-50%); align-items: center; }
+.ct-tl-labels .is-end { right: 0; align-items: flex-end; }
+
+/* ---------- Steps ---------- */
+.ct-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.ct-step { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.ct-step:nth-child(odd) { border-right: 1px solid var(--line); }
+.ct-step:nth-last-child(-n + 2) { border-bottom: 0; }
+.ct-step-n { width: 22px; height: 22px; border-radius: 50%; background: var(--neutral-bg); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.ct-step-body { display: flex; flex-direction: column; gap: 2px; }
+.ct-step-title { font-weight: 700; }
+@container (min-width: 1100px) {
+  .ct-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .ct-step { grid-template-columns: 22px minmax(0, 1fr); border-bottom: 0; border-right: 1px solid var(--line); }
+  .ct-step:last-child { border-right: 0; }
+  .ct-step .tag { grid-column: 2; justify-self: start; }
+}
+
+/* ---------- Answers ---------- */
+.ct-answers tr.ct-q { background: #F7F3FB; }
+.ct-answers tr.ct-q td:first-child { box-shadow: inset 3px 0 0 var(--special-ink); }
+.ct-note { margin-top: 6px; font-size: 12px; color: var(--special-ink); }
+
+/* ---------- Records & referral ---------- */
+.ct-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+@container (min-width: 780px) { .ct-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.ct-records { border-top: 1px solid var(--line); }
+.ct-records > li { display: flex; flex-direction: column; gap: 3px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.ct-rec-top { display: flex; align-items: center; gap: 10px; }
+.ct-due { color: var(--caution-ink); font-weight: 600; }
+.ct-follow { display: flex; flex-direction: column; gap: 1px; padding-left: 10px; border-left: 2px solid var(--line); margin-top: 2px; }
+.ct-rec-actions { margin-top: 4px; }
+.ct-referral { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.ct-referral .dl { grid-template-columns: 90px minmax(0, 1fr); width: 100%; }
+.ct-quote { margin: 0; padding: 8px 12px; background: var(--sunken); border-radius: var(--radius); font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+
+/* ---------- Outcomes ---------- */
+.ct-outcomes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@container (min-width: 1100px) { .ct-outcomes { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (max-width: 560px) { .ct-outcomes, .ct-steps { grid-template-columns: minmax(0, 1fr); } .ct-step:nth-child(odd) { border-right: 0; } }
+.ct-outcome { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; background: var(--surface); }
+.ct-outcome p { font-size: 12.5px; line-height: 1.45; }
+
+/* ---------- Rider ---------- */
+.ct-rider { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.ct-rider p { line-height: 1.45; max-width: 820px; }
+.ct-rider-ev { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.ct-rider-ev li { display: flex; align-items: center; gap: 10px; height: 34px; border-bottom: 1px solid var(--line); }
+.ct-access { display: flex; align-items: center; gap: 6px; }
+.ct-scroll { overflow-x: auto; }
+.ct-answer { min-width: 64px; }

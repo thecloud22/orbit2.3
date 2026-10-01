@@ -1,0 +1,11 @@
+# Local development: docker compose up -d, then SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/dev   # adds two development staff users
+claims:
+  dispatcher:
+    local-poll-enabled: true     # also poll from the app, so dev works even if Schedules are unavailable
+    local-poll-interval: 15s
+logging:
+  level:
+    com.example.claims: DEBUG

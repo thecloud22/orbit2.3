@@ -1,0 +1,11 @@
+<configuration>
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder><pattern>%d{HH:mm:ss.SSS} %-5level %logger{30} - %msg%n</pattern></encoder>
+  </appender>
+  <!-- Activity failures are expected in the retry tests; keep the output readable. -->
+  <logger name="io.temporal" level="ERROR"/>
+  <logger name="org.testcontainers" level="ERROR"/>
+  <logger name="com.github.dockerjava" level="WARN"/>
+  <logger name="org.flywaydb" level="WARN"/>
+  <root level="INFO"><appender-ref ref="STDOUT"/></root>
+</configuration>

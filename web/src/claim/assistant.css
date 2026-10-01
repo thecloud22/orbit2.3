@@ -1,0 +1,42 @@
+/* "Ask about this claim" — the assistant thread and composer in the context panel. */
+.ac { flex-grow: 1; min-height: 0; display: flex; flex-direction: column; }
+
+.ac-thread { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ac-turns { display: flex; flex-direction: column; gap: 14px; }
+.ac-turn { display: flex; flex-direction: column; gap: 6px; }
+
+.ac-q { align-self: flex-end; max-width: 92%; display: flex; flex-direction: column; gap: 2px; padding: 7px 10px; background: var(--sunken); border-radius: 6px 6px 2px 6px; }
+.ac-q p { font-weight: 600; line-height: 1.45; }
+.ac-who { font-size: 11px; color: var(--ink-3); }
+
+/* Answers are AI output, so they carry the proposed treatment: dashed, never mistaken for the record. */
+.ac-a { display: flex; flex-direction: column; gap: 6px; padding: 9px 11px; border: 1px dashed var(--proposed-line); border-radius: 2px 6px 6px 6px; background: var(--proposed-bg); line-height: 1.5; }
+.ac-a p { margin: 0; }
+.ac-a--declined { border-style: solid; border-color: var(--line-strong); background: var(--surface); }
+.ac-a--unknown { border-color: var(--line-strong); background: var(--surface); color: var(--ink-2); }
+.ac-kicker { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--accent); }
+.ac-a--declined .ac-kicker, .ac-a--unknown .ac-kicker { color: var(--ink-3); }
+.ac-bullets { display: flex; flex-direction: column; gap: 3px; padding-left: 16px; list-style: disc; }
+.ac-bullets li::marker { color: var(--ink-4); }
+.ac-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding-top: 2px; }
+.ac-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 0 -6px -4px; }
+.ac-actions:empty { display: none; }
+
+.ac-follow, .ac-starters { display: flex; flex-wrap: wrap; gap: 6px; }
+.ac-chip { min-height: 28px; padding: 4px 10px; border: 1px solid var(--accent-line); border-radius: 14px; background: var(--surface); color: var(--accent); font-size: 12px; font-weight: 600; text-align: left; line-height: 1.3; }
+.ac-chip:hover { background: var(--accent-tint); }
+
+.ac-reading { color: var(--ink-3); }
+.ac-dots i { font-style: normal; animation: ac-blink 1.2s infinite; }
+.ac-dots i:nth-child(2) { animation-delay: .2s; }
+.ac-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes ac-blink { 0%, 80%, 100% { opacity: .2; } 40% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ac-dots i { animation: none; } }
+
+.ac-composer { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--line); background: var(--surface); }
+.ac-input { display: flex; align-items: flex-end; gap: 6px; padding: 4px 4px 4px 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); }
+.ac-input:focus-within { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: -1px; }
+.ac-input textarea { flex-grow: 1; min-width: 0; min-height: 26px; max-height: 120px; padding: 4px 0; border: 0; background: transparent; resize: none; font-size: 13px; line-height: 1.45; }
+.ac-input textarea:focus { outline: none; }
+.ac-input .btn { width: 30px; padding: 0; }
+.ac-hint { font-size: 11.5px; line-height: 1.4; color: var(--ink-3); }

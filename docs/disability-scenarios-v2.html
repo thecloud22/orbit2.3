@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disability Claim Scenarios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="claims-v2.css">
+<script src="swimlane-v2.js"></script>
+
+</head>
+<body>
+<div class="wrap">
+  <nav class="pagenav" aria-label="Claims backend v2">
+    <span class="ver">V2</span>
+    <a href="temporal-explained-v2.html">Temporal, explained</a>
+    <a href="temporal-layers-v2.html">Layer by layer</a>
+    <a href="with-without-temporal-v2.html">With vs without</a>
+    <a href="backend-architecture-v2.html">Architecture</a>
+    <a href="intake-to-decision-v2.html">Intake to decision</a>
+    <a href="disability-scenarios-v2.html" aria-current="page">Disability scenarios</a>
+    <a href="failure-handling-v2.html">Failure handling</a>
+    <a href="product-change-v2.html">Product changes</a>
+  </nav>
+
+  <header>
+    <div class="eyebrow">Claims platform · individual disability income · v2</div>
+    <h1>Disability Claim Scenarios</h1>
+    <p class="lede">Nine scenarios, each drawn as one swimlane. Every deadline is a row in the deadlines table. Temporal only runs short workflows: each one is started by a deadline coming due or by something that happened, finishes within minutes to days, and writes its result to Postgres. Red numbers mark where a scenario can break; the <a href="failure-handling-v2.html">failure handling</a> page explains each one.</p>
+    <p class="note">Products, amounts and durations are labelled examples: a $5,000 monthly benefit, a 90-day elimination period, monthly proof, and a 6-month recurrence window.</p>
+  </header>
+
+  <section>
+    <div class="index">
+      <div>
+        <h3>Good outcomes</h3>
+        <ol>
+          <li><span class="n">1</span><a href="#s1">Total disability, end to end</a></li>
+          <li><span class="n">2</span><a href="#s2">One month of benefits, zoomed in</a></li>
+          <li><span class="n">3</span><a href="#s3">A residual disability month</a></li>
+          <li><span class="n">4</span><a href="#s4">Definition change at 24 months</a></li>
+          <li><span class="n">5</span><a href="#s5">Disabled again inside the recurrence window</a></li>
+        </ol>
+      </div>
+      <div>
+        <h3>Bad outcomes</h3>
+        <ol>
+          <li><span class="n">6</span><a href="#s6">Denied, then overturned on reconsideration</a></li>
+          <li><span class="n">7</span><a href="#s7">Proof never arrives</a></li>
+          <li><span class="n">8</span><a href="#s8">Overpayment after an unreported return to work</a></li>
+          <li><span class="n">9</span><a href="#s9">Sanctions hit and a returned payment</a></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section id="s1">
+    <div class="head"><span class="tag good">Good outcome · 1</span><h2>Total disability, end to end</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="s1"></div>
+      <figcaption>
+        <span>The claimant files, evidence comes in during the elimination period, the examiner approves, benefits are paid monthly, and the claim closes when they return to work. No workflow lives longer than the work it does. Status letters come from a deadline every 30 days until the decision. When the examiner decides, the decision workflow closes the decision-limit deadline in the same transaction.</span>
+        <span class="breaks">Can break at 1 (status letter deadline never written), 5 (filing saved but intake never started), 8 (proof that doesn't match a period), 11 (claim closes with money in flight), 13 (payment run).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="s2">
+    <div class="head"><span class="tag good">Good outcome · 2</span><h2>One month of benefits, zoomed in</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="s2"></div>
+      <figcaption>
+        <span>On 1 March a deadline opens the period: the workflow creates the payment item, sends the proof request, and writes two deadlines, a reminder for 15 March and proof due for 31 March. Proof arrives on 10 March. The proof workflow calculates, clears the item and closes both deadlines in one transaction, so on 15 and 31 March nothing fires. The payment run takes the item on 1 April, and the next period's deadline starts the cycle again.</span>
+        <span class="breaks">Can break at 5 (upload saved, workflow never started), 8 (proof covers a different period), 13 (payment run).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="s3">
+    <div class="head"><span class="tag good">Good outcome · 3</span><h2>A residual disability month</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="s3"></div>
+      <figcaption>
+        <span>Example: pre-disability income of $10,000 a month, a $5,000 benefit. In month 8 the claimant earns $5,200, a 48% loss of income, so the residual benefit is 48% of $5,000, or $2,400. The examiner confirms the switch to residual; a workflow records it on the benefit line. When the tax return arrives, a true-up workflow compares actual income with what was reported and writes an adjustment item. It never edits a paid item.</span>
+        <span class="breaks">Can break at 7 (examiner and workflow change the benefit line at once), 9 (calculated with the wrong definition or rules version), 10 (a paid month changes).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="s4">
+    <div class="head"><span class="tag good">Good outcome · 4</span><h2>Definition change at 24 months</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="s4"></div>
+      <figcaption>
+        <span>Many policies pay for inability to do your own occupation for the first 24 months, then only for inability to do any occupation you're suited to. At approval the decision workflow writes two deadlines: a review at month 22 and the switch at month 24. The review gathers records and a vocational assessment. Outcome A continues benefits under the new definition. Outcome B ends them, with a letter and an appeal window. With an own-occupation rider to age 65, the product configuration never asks for these deadlines.</span>
+        <span class="breaks">Can break at 1 (the month-24 deadline is never written, so own-occupation benefits run on), 9 (benefit line not switched), 12 (review task sits in a backlog).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="s5">
+    <div class="head"><span class="tag good">Good outcome · 5</span><h2>Disabled again inside the recurrence window</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="s5"></div>
+      <figcaption>
+        <span>When the claim closes, the close workflow writes one deadline: the recurrence window ends at month 20. If the claimant is disabled again from the same cause before then, intake finds the closed claim, the examiner confirms the cause, and the same claim reopens with no new elimination period. After month 20 the window deadline has closed the chance, so a new claim starts with its own elimination period.</span>
+        <span class="breaks">Can break at 1 (window deadline missing, so the wrong path is taken), 7 (examiner and intake disagree on the cause), 9 (the check reads the wrong product version).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="s6">
+    <div class="head"><span class="tag bad">Bad outcome · 6</span><h2>Denied, then overturned on reconsideration</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="s6"></div>
+      <figcaption>
+        <span>The denial letter states the claimant's rights. The claimant can ask for reconsideration with new records, or complain to the state Department of Insurance, which adds its own response deadline. A second examiner overturns the decision. A back-pay workflow creates payment items for months 4 to 8 with interest, and the regular monthly cycle starts from the next period.</span>
+        <span class="breaks">Can break at 1 (reconsideration decision limit not written), 10 (back pay touches months that were never paid, with interest), 16 (denial letter can't go out while the letter vendor is down).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="s7">
+    <div class="head"><span class="tag bad">Bad outcome · 7</span><h2>Proof never arrives</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="s7"></div>
+      <figcaption>
+        <span>Each step is a deadline firing a short workflow: open the period, remind, and on the due date hold the item, write to the claimant and create an examiner task. The hold writes its own review deadline, so it can't be forgotten. In June the examiner closes the claim, and the close writes a late-proof limit. Policies usually accept late proof within a set time, often a year. When proof for March to July arrives in August, one workflow reopens the claim and clears all five periods.</span>
+        <span class="breaks">Can break at 3 (reminder fires late after an outage), 8 (one document covers five periods), 12 (hold without a review), 16 (hold letter can't be sent).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="s8">
+    <div class="head"><span class="tag bad">Bad outcome · 8</span><h2>Overpayment after an unreported return to work</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="s8"></div>
+      <figcaption>
+        <span>The claimant goes back to work in January without saying so, and February and March are paid. The tax return in April shows the income. The examiner decides recovery happened in January, and the close workflow back-dates the closure, cancels open items and records a $15,000 overpayment. Recovery is tracked by deadlines: a repayment due date, then instalment checks, or a referral to collections if nothing comes back. If the claimant dies instead, a Death Master File match or a call from the family starts the same close, back-dated to the date of death.</span>
+        <span class="breaks">Can break at 10 (corrections to paid months must be new rows), 11 (items already in a bank file when the claim closes).</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="s9">
+    <div class="head"><span class="tag bad">Bad outcome · 9</span><h2>Sanctions hit and a returned payment</h2></div>
+    <figure>
+      <div class="canvas" data-swimlane="s9"></div>
+      <figcaption>
+        <span>The nightly re-screen flags a possible match on the payee. A workflow puts a hold on the payee, not just the item, and writes a hold review deadline. Compliance clears it as a false positive and the item is paid on 1 June. On 5 June the bank returns it because the account is closed. The returns job starts a workflow that holds the account and asks for new details. The payment is reissued as a new item once they arrive.</span>
+        <span class="breaks">Can break at 12 (a hold nobody reviews), 13 (payment run), 14 (next month pays the same closed account).</span>
+      </figcaption>
+    </figure>
+  </section>
+</div>
+
+<script>
+(function () {
+  var P = 'people', S = 'state', D = 'deadlines', T = 'temporal', B = 'batch', E = 'external';
+
+  Swimlane.add('s1', {
+    aria: 'Swimlane of a total disability claim from filing through evidence, decision, monthly benefits and recovery, showing people, state, deadlines, short Temporal workflows, batch and outside systems.',
+    phases: [
+      { n: 'Filing', c: 'day 0', w: 1 },
+      { n: 'Evidence', c: 'elimination period runs', w: 1.5 },
+      { n: 'Decision', c: 'before the limit', w: 1 },
+      { n: 'Monthly benefits', c: 'repeats each month', w: 1.6 },
+      { n: 'Recovery', c: 'back to work', w: 1.3 }
+    ],
+    items: [
+      [P, 0, .5, 0, 'chip', 'files claim', 'pf'],
+      [P, 1, .28, 0, 'chip', 'physician sends APS', 'pa'],
+      [P, 2, .5, 0, 'chip', 'examiner approves', 'pd'],
+      [P, 3, .68, 0, 'chip', 'monthly proof', 'pm'],
+      [P, 4, .3, 0, 'chip', 'returns to work', 'pr'],
+      { k: 'track', lane: S, p: 0, t: 'filed' },
+      { k: 'track', lane: S, p: 1, t: 'evidence' },
+      { k: 'track', lane: S, p: 2, t: 'approved' },
+      { k: 'track', lane: S, p: 3, to: 4, x1: .24, t: 'paying' },
+      { k: 'track', lane: S, p: 4, x0: .36, t: 'closed, reopenable', tone: 'end' },
+      [S, 0, .5, 1, 'chip', 'claim created'],
+      [S, 1, .28, 1, 'chip', 'APS attached'],
+      [S, 2, .5, 1, 'chip', 'decision locked'],
+      [S, 3, .68, 1, 'chip', 'item cleared'],
+      [S, 4, .3, 1, 'chip', 'open items cancelled'],
+      [D, 0, .5, 0, 'due', 'letter every 30 days', 'd0'],
+      [D, 1, .28, 0, 'done', 'APS reminder'],
+      [D, 1, .76, 0, 'due', 'status letter', 'd1'],
+      [D, 2, .5, 0, 'done', 'decision limit'],
+      [D, 3, .22, 0, 'due', 'period opens', 'd3'],
+      [D, 3, .68, 0, 'done', 'proof due'],
+      [D, 4, .3, 0, 'done', 'proof due'],
+      [D, 4, .64, 1, 'due', 'recurrence window ends'],
+      [T, 0, .5, 0, 'wfE', 'intake checks', 'w0', 'pf'],
+      [T, 1, .28, 0, 'wfE', 'document', 'w1', 'pa'],
+      [T, 1, .76, 1, 'wfD', 'status letter', 'w2', 'd1'],
+      [T, 2, .5, 0, 'wfE', 'decision', 'w3', 'pd'],
+      [T, 3, .22, 0, 'wfD', 'open period', 'w4', 'd3'],
+      [T, 3, .68, 0, 'wfE', 'proof', 'w5', 'pm'],
+      [T, 4, .3, 0, 'wfE', 'close claim', 'w6', 'pr'],
+      [B, 3, .68, 0, 'chip', 'payment run', 'b3'],
+      [E, 0, .5, 0, 'chip', 'policy admin'],
+      [E, 0, .5, 1, 'chip', 'sanctions screen'],
+      [E, 1, .28, 0, 'chip', 'records vendor'],
+      [E, 1, .76, 0, 'chip', 'letters'],
+      [E, 2, .5, 0, 'chip', 'decision letter'],
+      [E, 2, .5, 1, 'chip', 'policy admin: waiver'],
+      [E, 3, .22, 0, 'chip', 'proof request'],
+      [E, 3, .68, 0, 'chip', 'bank'],
+      [E, 4, .3, 0, 'chip', 'closing letter']
+    ],
+    marks: [{ on: 'd0', n: 1 }, { on: 'w0', n: 5 }, { on: 'w5', n: 8 }, { on: 'w6', n: 11 }, { on: 'b3', n: 13, lvl: 'lo' }]
+  });
+
+  Swimlane.add('s2', {
+    aria: 'One month of disability benefits: a deadline opens the period on 1 March, proof arrives on 10 March and clears the item, the reminder and proof-due deadlines are closed and never fire, the payment run pays on 1 April and the next period opens.',
+    phases: [
+      { n: '1 Mar', c: 'period opens', w: 1.2 },
+      { n: '10 Mar', c: 'proof arrives', w: 1.6 },
+      { n: '15 Mar', c: 'reminder date', w: 1.3 },
+      { n: '31 Mar', c: 'proof due date', w: 1.3 },
+      { n: '1 Apr', c: 'payment run', w: 1.1 },
+      { n: '2 Apr', c: 'bank, next period', w: 1.3 }
+    ],
+    items: [
+      [P, 1, .5, 0, 'chip', 'uploads statement', 'pu'],
+      { k: 'track', lane: S, p: 0, to: 1, x1: .4, t: 'awaiting proof' },
+      { k: 'track', lane: S, p: 1, x0: .48, to: 4, x1: .38, t: 'cleared' },
+      { k: 'track', lane: S, p: 4, x0: .45, to: 5, x1: .12, t: 'in run' },
+      { k: 'track', lane: S, p: 5, x0: .18, t: 'paid' },
+      [S, 0, .5, 1, 'chip', 'item created'],
+      [S, 1, .5, 1, 'chip', 'document attached', 's1'],
+      [S, 5, .5, 1, 'chip', 'next item created'],
+      [D, 0, .5, 0, 'due', 'period opens', 'd0'],
+      [D, 2, .5, 0, 'done', 'reminder · closed'],
+      [D, 3, .5, 0, 'done', 'proof due · closed'],
+      [D, 5, .5, 0, 'due', 'next period opens', 'd5'],
+      [T, 0, .5, 0, 'wfD', 'open period', 'w0', 'd0'],
+      [T, 1, .5, 0, 'wfE', 'proof workflow', 'w1', 'pu'],
+      [T, 1, .5, 1, 'chip', 'calculate, clear, close deadlines'],
+      [T, 5, .5, 0, 'wfD', 'open period', 'w5', 'd5'],
+      [B, 4, .5, 0, 'chip', 'payment run', 'b4'],
+      [E, 0, .5, 0, 'chip', 'proof request'],
+      [E, 5, .5, 0, 'chip', 'bank acknowledges']
+    ],
+    marks: [{ on: 's1', n: 5 }, { on: 'w1', n: 8 }, { on: 'b4', n: 13, lvl: 'lo' }]
+  });
+
+  Swimlane.add('s3', {
+    aria: 'Residual disability: total disability in month 7, part-time work in month 8 switches the benefit line to residual and pays $2,400, month 9 pays $3,100, the tax return in April produces a $450 adjustment item, and month 12 returns to total disability.',
+    phases: [
+      { n: 'Month 7', c: 'total disability', w: 1.1 },
+      { n: 'Month 8', c: 'back part-time', w: 1.6 },
+      { n: 'Month 9', c: 'residual', w: 1.2 },
+      { n: 'April', c: 'tax return arrives', w: 1.5 },
+      { n: 'Month 12', c: 'stops work again', w: 1.3 }
+    ],
+    items: [
+      [P, 0, .5, 0, 'chip', 'monthly proof', 'pm0'],
+      [P, 1, .28, 0, 'chip', 'reports part-time work', 'pp'],
+      [P, 1, .74, 1, 'chip', 'examiner reviews change', 'pe'],
+      [P, 2, .5, 0, 'chip', 'income statement', 'pm2'],
+      [P, 3, .5, 0, 'chip', 'tax return', 'pt'],
+      [P, 4, .5, 0, 'chip', 'monthly proof', 'pm4'],
+      { k: 'track', lane: S, p: 0, t: 'total' },
+      { k: 'track', lane: S, p: 1, to: 3, t: 'residual' },
+      { k: 'track', lane: S, p: 4, t: 'total' },
+      [S, 0, .5, 1, 'chip', 'cleared $5,000'],
+      [S, 1, .28, 1, 'chip', '48% loss → $2,400', 's1'],
+      [S, 2, .5, 1, 'chip', '62% loss → $3,100'],
+      [S, 3, .5, 1, 'chip', 'adjustment +$450', 's3'],
+      [S, 4, .5, 1, 'chip', 'cleared $5,000'],
+      [D, 0, .5, 0, 'done', 'proof due'],
+      [D, 1, .28, 0, 'done', 'proof due'],
+      [D, 2, .5, 0, 'done', 'proof due'],
+      [D, 3, .5, 0, 'done', 'tax return due'],
+      [D, 4, .5, 0, 'done', 'proof due'],
+      [T, 0, .5, 0, 'wfE', 'proof', 'w0', 'pm0'],
+      [T, 1, .28, 0, 'wfE', 'proof: residual', 'w1', 'pp'],
+      [T, 1, .74, 1, 'wfE', 'switch definition', 'w1b', 'pe'],
+      [T, 2, .5, 0, 'wfE', 'proof: residual', 'w2', 'pm2'],
+      [T, 3, .5, 0, 'wfE', 'income true-up', 'w3', 'pt'],
+      [T, 4, .5, 0, 'wfE', 'proof: total', 'w4', 'pm4'],
+      { k: 'span', lane: B, p: 0, to: 4, t: 'daily payment run pays whatever is cleared' },
+      [E, 3, .5, 0, 'chip', 'letter explains adjustment']
+    ],
+    marks: [{ on: 'pe', n: 7 }, { on: 's1', n: 9 }, { on: 's3', n: 10 }]
+  });
+
+  Swimlane.add('s4', {
+    aria: 'Definition change: at approval the workflow writes review and switch deadlines; at month 22 a review gathers records and a vocational assessment; at month 24 the benefit line switches from own occupation to any occupation; outcome A continues benefits, outcome B ends them with an appeal window.',
+    phases: [
+      { n: 'Approval', c: 'month 3', w: 1.1 },
+      { n: 'Month 22', c: 'review starts', w: 1.6 },
+      { n: 'Month 24', c: 'definition changes', w: 1.2 },
+      { n: 'A · still disabled', c: 'for any occupation', w: 1.45, tone: 'good' },
+      { n: 'B · can do other work', c: 'benefits end', w: 1.45, tone: 'bad' }
+    ],
+    items: [
+      [P, 0, .5, 0, 'chip', 'examiner approves', 'pa'],
+      [P, 1, .28, 0, 'chip', 'claimant sends records', 'pc'],
+      [P, 3, .5, 0, 'chip', 'examiner: still disabled', 'px'],
+      [P, 4, .5, 0, 'neg', 'examiner: can work', 'py'],
+      { k: 'track', lane: S, p: 0, to: 2, x1: .45, t: 'paying · own occupation' },
+      { k: 'track', lane: S, p: 2, x0: .52, to: 3, t: 'paying · any occupation' },
+      { k: 'track', lane: S, p: 4, t: 'closed', tone: 'bad' },
+      [S, 0, .5, 1, 'chip', 'approved'],
+      [S, 2, .5, 1, 'chip', 'line: any occupation', 's2'],
+      [S, 3, .5, 1, 'chip', 'decision locked'],
+      [S, 4, .5, 1, 'chip', 'decision locked'],
+      [D, 0, .5, 0, 'chip', 'deadlines: months 22, 24'],
+      [D, 1, .72, 0, 'due', 'review starts', 'd1'],
+      [D, 2, .5, 0, 'due', 'definition changes', 'd2'],
+      [D, 4, .5, 0, 'due', 'appeal window'],
+      [T, 0, .5, 0, 'wfE', 'decision', 'w0', 'pa'],
+      [T, 1, .28, 0, 'wfE', 'document', 'w1', 'pc'],
+      [T, 1, .72, 1, 'wfD', 'definition review', 'w1b', 'd1'],
+      [T, 2, .5, 0, 'wfD', 'switch definition', 'w2', 'd2'],
+      [T, 3, .5, 0, 'wfE', 'decision: continue', 'w3', 'px'],
+      [T, 4, .5, 0, 'wfE', 'decision: end', 'w4', 'py'],
+      [E, 1, .28, 1, 'chip', 'records vendor'],
+      [E, 1, .72, 0, 'chip', 'vocational review'],
+      [E, 3, .5, 0, 'chip', 'letter: benefits continue'],
+      [E, 4, .5, 0, 'chip', 'letter, appeal rights']
+    ],
+    marks: [{ on: 'd2', n: 1 }, { on: 's2', n: 9 }, { on: 'w1b', n: 12 }]
+  });
+
+  Swimlane.add('s5', {
+    aria: 'Recurrence: the claim closes at month 14 and writes a window deadline for month 20; at month 17 the claimant is disabled again from the same cause, intake finds the closed claim and the same claim reopens with no new elimination period; after month 20 a new claim starts instead.',
+    phases: [
+      { n: 'Month 14', c: 'returns to work', w: 1.3 },
+      { n: 'Months 14–20', c: 'window open', w: 1.3 },
+      { n: 'Month 17', c: 'disabled again', w: 1.6 },
+      { n: 'Month 17 on', c: 'same claim resumes', w: 1.4 },
+      { n: 'After month 20', c: 'outside the window', w: 1.5, tone: 'bad' }
+    ],
+    items: [
+      [P, 0, .52, 0, 'chip', 'returns to work', 'pr'],
+      [P, 2, .3, 0, 'chip', 'same cause, files again', 'pf'],
+      [P, 2, .75, 1, 'chip', 'examiner confirms cause', 'pe'],
+      [P, 4, .5, 0, 'chip', 'files again', 'pn'],
+      { k: 'track', lane: S, p: 0, x1: .42, t: 'paying' },
+      { k: 'track', lane: S, p: 0, x0: .5, to: 2, x1: .5, t: 'closed, reopenable', tone: 'end' },
+      { k: 'track', lane: S, p: 2, x0: .56, to: 3, t: 'reopened · paying' },
+      { k: 'track', lane: S, p: 4, t: 'new claim', tone: 'bad' },
+      [S, 0, .52, 1, 'chip', 'items cancelled'],
+      [S, 2, .3, 1, 'chip', 'same claim reopened'],
+      [S, 3, .5, 1, 'chip', 'no new elimination period'],
+      [S, 4, .5, 1, 'chip', 'new elimination period'],
+      [D, 1, .5, 0, 'due', 'window ends · month 20', 'dw'],
+      [D, 3, .5, 0, 'due', 'period opens', 'd3'],
+      [D, 4, .5, 0, 'due', 'letter every 30 days'],
+      [T, 0, .52, 0, 'wfE', 'close claim', 'w0', 'pr'],
+      [T, 2, .3, 0, 'wfE', 'recurrence check', 'w2', 'pf'],
+      [T, 2, .75, 1, 'wfE', 'reopen claim', 'w2b', 'pe'],
+      [T, 3, .5, 0, 'wfD', 'open period', 'w3', 'd3'],
+      [T, 4, .5, 0, 'wfE', 'intake: new claim', 'w4', 'pn'],
+      [E, 0, .52, 0, 'chip', 'closing letter'],
+      [E, 3, .5, 0, 'chip', 'proof request'],
+      [E, 4, .5, 0, 'chip', 'acknowledgement']
+    ],
+    marks: [{ on: 'dw', n: 1 }, { on: 'pe', n: 7 }, { on: 'w2', n: 9 }]
+  });
+
+  Swimlane.add('s6', {
+    aria: 'Denial and reconsideration: the examiner denies in month 3 with a letter stating appeal rights; the claimant may complain to the Department of Insurance or ask for reconsideration with new records; a second examiner overturns the decision and a back-pay workflow creates items for months 4 to 8 with interest.',
+    phases: [
+      { n: 'Month 3', c: 'claim denied', w: 1.3, tone: 'bad' },
+      { n: 'Months 3–9', c: 'reconsideration window', w: 1.35 },
+      { n: 'Month 5', c: 'claimant asks again', w: 1.5 },
+      { n: 'Month 6', c: 'decision overturned', w: 1.35 },
+      { n: 'Month 6', c: 'back pay', w: 1.5 }
+    ],
+    items: [
+      [P, 0, .5, 0, 'neg', 'examiner denies', 'pd'],
+      [P, 1, .5, 0, 'neg', 'or: complaint to the DOI', 'pc'],
+      [P, 2, .3, 0, 'chip', 'asks for reconsideration', 'pa'],
+      [P, 2, .3, 1, 'chip', 'new medical records'],
+      [P, 3, .5, 0, 'chip', 'second examiner approves', 'px'],
+      { k: 'track', lane: S, p: 0, to: 2, x1: .12, t: 'denied', tone: 'bad' },
+      { k: 'track', lane: S, p: 2, x0: .18, to: 3, x1: .45, t: 'under reconsideration' },
+      { k: 'track', lane: S, p: 3, x0: .52, to: 4, t: 'approved · paying' },
+      [S, 0, .5, 1, 'chip', 'decision locked'],
+      [S, 1, .5, 1, 'chip', 'complaint logged'],
+      [S, 2, .3, 1, 'chip', 'records attached'],
+      [S, 3, .5, 1, 'chip', 'new decision locked'],
+      [S, 4, .35, 1, 'chip', '5 items + interest', 's4'],
+      [D, 1, .5, 0, 'due', 'reconsideration window'],
+      [D, 1, .5, 1, 'due', 'DOI response due'],
+      [D, 2, .72, 0, 'due', 'decision limit', 'dl'],
+      [D, 4, .75, 0, 'due', 'period opens', 'd4'],
+      [T, 0, .5, 0, 'wfE', 'decision', 'w0', 'pd'],
+      [T, 1, .5, 0, 'wfE', 'complaint', 'w1', 'pc'],
+      [T, 2, .3, 0, 'wfE', 'reconsideration', 'w2', 'pa'],
+      [T, 3, .5, 0, 'wfE', 'decision', 'w3', 'px'],
+      [T, 4, .35, 0, 'wfE', 'back pay: months 4–8', 'w4'],
+      [T, 4, .75, 1, 'wfD', 'open period', 'w4b', 'd4'],
+      [B, 4, .35, 0, 'chip', 'payment run'],
+      [E, 0, .5, 0, 'chip', 'denial letter, appeal rights', 'e0'],
+      [E, 1, .5, 0, 'chip', 'response to the DOI'],
+      [E, 2, .3, 0, 'chip', 'records vendor'],
+      [E, 3, .5, 0, 'chip', 'approval letter'],
+      [E, 4, .35, 0, 'chip', 'bank']
+    ],
+    marks: [{ on: 'e0', n: 16 }, { on: 'dl', n: 1 }, { on: 's4', n: 10 }]
+  });
+
+  Swimlane.add('s7', {
+    aria: 'Proof never arrives: deadlines open the period, send a reminder, hold the item on the due date, and schedule a hold review; the examiner closes the claim in June with a late-proof limit; proof for five months arrives in August and one workflow reopens the claim and clears all five periods.',
+    phases: [
+      { n: '1 Mar', c: 'period opens', w: 1.15 },
+      { n: '15 Mar', c: 'reminder', w: 1.15 },
+      { n: '31 Mar', c: 'proof due', w: 1.4, tone: 'bad' },
+      { n: 'April', c: 'examiner follows up', w: 1.3 },
+      { n: 'June', c: 'closed, no proof', w: 1.3, tone: 'bad' },
+      { n: 'August', c: 'proof arrives late', w: 1.5 }
+    ],
+    items: [
+      [P, 3, .5, 0, 'chip', 'examiner calls'],
+      [P, 3, .5, 1, 'neg', 'no response'],
+      [P, 4, .5, 0, 'neg', 'examiner closes', 'pc'],
+      [P, 5, .5, 0, 'chip', 'sends proof, Mar–Jul', 'pl'],
+      { k: 'track', lane: S, p: 0, to: 2, x1: .4, t: 'awaiting proof' },
+      { k: 'track', lane: S, p: 2, x0: .46, to: 4, x1: .42, t: 'held', tone: 'bad' },
+      { k: 'track', lane: S, p: 4, x0: .48, to: 5, x1: .4, t: 'closed', tone: 'end' },
+      { k: 'track', lane: S, p: 5, x0: .46, t: 'paying' },
+      [S, 0, .5, 1, 'chip', 'item: awaiting proof'],
+      [S, 2, .5, 1, 'chip', 'examiner task'],
+      [S, 4, .5, 1, 'chip', 'items cancelled'],
+      [S, 5, .5, 1, 'chip', '5 items cleared'],
+      [D, 0, .5, 0, 'due', 'period opens', 'd0'],
+      [D, 1, .5, 0, 'due', 'reminder', 'd1'],
+      [D, 2, .5, 0, 'due', 'proof due', 'd2'],
+      [D, 3, .5, 0, 'due', 'hold review', 'd3'],
+      [D, 4, .5, 0, 'due', 'late-proof limit'],
+      [T, 0, .5, 0, 'wfD', 'open period', 'w0', 'd0'],
+      [T, 1, .5, 0, 'wfD', 'reminder', 'w1', 'd1'],
+      [T, 2, .5, 0, 'wfD', 'proof overdue: hold', 'w2', 'd2'],
+      [T, 3, .5, 0, 'wfD', 'hold review', 'w3', 'd3'],
+      [T, 4, .5, 0, 'wfE', 'close: no proof', 'w4', 'pc'],
+      [T, 5, .5, 0, 'wfE', 'late proof: 5 periods', 'w5', 'pl'],
+      [B, 5, .5, 0, 'chip', 'payment run'],
+      [E, 0, .5, 0, 'chip', 'proof request'],
+      [E, 1, .5, 0, 'chip', 'reminder letter'],
+      [E, 2, .5, 0, 'chip', 'letter: benefits held', 'e2'],
+      [E, 4, .5, 0, 'chip', 'closing letter, rights'],
+      [E, 5, .5, 0, 'chip', 'bank']
+    ],
+    marks: [{ on: 'w1', n: 3, lvl: 'lo' }, { on: 'e2', n: 16 }, { on: 'd3', n: 12 }, { on: 'w5', n: 8 }]
+  });
+
+  Swimlane.add('s8', {
+    aria: 'Overpayment: the claimant returns to work in January without reporting it, February and March are paid, the April tax return shows the income, the examiner back-dates the closure to January and records a $15,000 overpayment, and deadlines track repayment or a collections referral.',
+    phases: [
+      { n: 'January', c: 'back at work, not reported', w: 1.5, tone: 'bad' },
+      { n: 'Feb – Mar', c: 'still paid', w: 1.2 },
+      { n: 'April', c: 'tax return shows income', w: 1.5 },
+      { n: 'May', c: 'overpayment decided', w: 1.45, tone: 'bad' },
+      { n: 'June on', c: 'recovery', w: 1.6 }
+    ],
+    items: [
+      [P, 0, .5, 0, 'neg', 'works again, not reported'],
+      [P, 1, .5, 0, 'chip', 'monthly proof', 'pm'],
+      [P, 2, .3, 0, 'chip', 'tax return', 'pt'],
+      [P, 2, .72, 1, 'chip', 'examiner reviews'],
+      [P, 3, .5, 0, 'chip', 'examiner: recovered in Jan', 'pe'],
+      [P, 4, .3, 0, 'chip', 'agrees repayment plan', 'pp'],
+      [P, 4, .75, 1, 'neg', 'or: no response'],
+      { k: 'track', lane: S, p: 0, to: 3, x1: .3, t: 'paying' },
+      { k: 'track', lane: S, p: 3, x0: .36, to: 4, t: 'closed · back-dated to January', tone: 'end' },
+      [S, 1, .5, 1, 'chip', '3 items paid'],
+      [S, 2, .3, 1, 'chip', 'income since January'],
+      [S, 3, .5, 1, 'chip', 'overpayment $15,000', 's3'],
+      [S, 4, .3, 1, 'chip', 'repayment plan'],
+      [D, 1, .5, 0, 'done', 'proof due'],
+      [D, 2, .3, 0, 'done', 'tax return due'],
+      [D, 3, .5, 0, 'due', 'repayment due · 60 days'],
+      [D, 4, .75, 0, 'due', 'instalment due', 'di'],
+      [T, 1, .5, 0, 'wfE', 'proof', 'w1', 'pm'],
+      [T, 2, .3, 0, 'wfE', 'income true-up', 'w2', 'pt'],
+      [T, 3, .5, 0, 'wfE', 'close, back-dated', 'w3', 'pe'],
+      [T, 4, .3, 0, 'wfE', 'repayment plan', 'w4', 'pp'],
+      [T, 4, .75, 1, 'wfD', 'instalment check', 'w4b', 'di'],
+      [B, 1, .5, 0, 'chip', 'payment runs'],
+      [B, 4, .75, 0, 'neg', 'collections referral'],
+      [E, 1, .5, 0, 'chip', 'bank'],
+      [E, 3, .5, 0, 'chip', 'overpayment letter'],
+      [E, 4, .3, 0, 'chip', 'bank: repayments']
+    ],
+    marks: [{ on: 's3', n: 10 }, { on: 'w3', n: 11 }]
+  });
+
+  Swimlane.add('s9', {
+    aria: 'Payment problems: the nightly re-screen flags a possible sanctions match, a workflow holds the payee, compliance clears it and the item is paid; the bank later returns a payment for a closed account, the returns job starts a workflow that holds the account, and the item is reissued when new details arrive.',
+    phases: [
+      { n: 'Night', c: 'sanctions list updated', w: 1.3 },
+      { n: 'Day 1', c: 'possible match', w: 1.4, tone: 'bad' },
+      { n: 'Day 3', c: 'false positive', w: 1.3 },
+      { n: '1 June', c: 'payment sent', w: 1.1 },
+      { n: '5 June', c: 'payment returned', w: 1.45, tone: 'bad' },
+      { n: '20 June', c: 'new bank details', w: 1.45 }
+    ],
+    items: [
+      [P, 1, .5, 0, 'chip', 'compliance reviews'],
+      [P, 2, .5, 0, 'chip', 'match cleared', 'pcl'],
+      [P, 5, .5, 0, 'chip', 'claimant updates bank', 'pu'],
+      { k: 'track', lane: S, p: 0, to: 1, x1: .3, t: 'cleared' },
+      { k: 'track', lane: S, p: 1, x0: .36, to: 2, x1: .45, t: 'held · payee', tone: 'bad' },
+      { k: 'track', lane: S, p: 2, x0: .52, to: 3, x1: .3, t: 'cleared' },
+      { k: 'track', lane: S, p: 3, x0: .36, to: 4, x1: .3, t: 'paid' },
+      { k: 'track', lane: S, p: 4, x0: .36, to: 5, x1: .42, t: 'returned · held', tone: 'bad' },
+      { k: 'track', lane: S, p: 5, x0: .48, t: 'cleared' },
+      [S, 1, .5, 1, 'chip', 'hold on payee'],
+      [S, 2, .5, 1, 'chip', 'hold released'],
+      [S, 4, .5, 1, 'chip', 'hold on account'],
+      [S, 5, .5, 1, 'chip', 'item reissued'],
+      [D, 1, .5, 0, 'due', 'hold review · 5 days', 'dh'],
+      [D, 4, .5, 0, 'due', 'bank details due'],
+      [T, 1, .5, 0, 'wfE', 'sanctions hold', 'w1', 'bm'],
+      [T, 2, .5, 0, 'wfE', 'release hold', 'w2', 'pcl'],
+      [T, 4, .5, 0, 'wfE', 'returned payment', 'w4', 'br'],
+      [T, 5, .5, 0, 'wfE', 'reissue', 'w5', 'pu'],
+      [B, 0, .5, 0, 'chip', 're-screen all payees'],
+      [B, 1, .5, 0, 'neg', 'possible match', 'bm'],
+      [B, 3, .5, 0, 'chip', 'payment run', 'b3'],
+      [B, 4, .5, 0, 'chip', 'returns job', 'br'],
+      [B, 5, .5, 0, 'chip', 'payment run'],
+      [E, 0, .5, 0, 'chip', 'sanctions list'],
+      [E, 3, .5, 0, 'chip', 'bank'],
+      [E, 4, .5, 0, 'neg', 'returned: account closed', 'er'],
+      [E, 4, .5, 1, 'chip', 'letter: update details'],
+      [E, 5, .5, 0, 'chip', 'bank']
+    ],
+    links: [{ a: 'er', b: 'br', style: 'plain' }],
+    marks: [{ on: 'dh', n: 12 }, { on: 'b3', n: 13, lvl: 'lo' }, { on: 'br', n: 14, lvl: 'lo' }]
+  });
+})();
+</script>
+</body>
+</html>

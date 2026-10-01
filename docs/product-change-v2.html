@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disability Product Changes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="claims-v2.css">
+<script src="swimlane-v2.js"></script>
+
+</head>
+<body>
+<div class="wrap">
+  <nav class="pagenav" aria-label="Claims backend v2">
+    <span class="ver">V2</span>
+    <a href="temporal-explained-v2.html">Temporal, explained</a>
+    <a href="temporal-layers-v2.html">Layer by layer</a>
+    <a href="with-without-temporal-v2.html">With vs without</a>
+    <a href="backend-architecture-v2.html">Architecture</a>
+    <a href="intake-to-decision-v2.html">Intake to decision</a>
+    <a href="disability-scenarios-v2.html">Disability scenarios</a>
+    <a href="failure-handling-v2.html">Failure handling</a>
+    <a href="product-change-v2.html" aria-current="page">Product changes</a>
+  </nav>
+
+  <header>
+    <div class="eyebrow">Claims platform · product changes · v2</div>
+    <h1>Disability Product Changes</h1>
+    <p class="lede">How a new disability product or a new variation goes live, and what happens to claims that are already running. Most changes are data in the product configuration. Code changes only when a variation brings new events or a new shape of claim.</p>
+    <p class="note">The products named here are labelled examples of common individual disability variations, not your actual book.</p>
+  </header>
+
+  <section>
+    <div class="head">
+      <h2>Three kinds of change, three rules for running claims</h2>
+      <p class="note">Every change is one of these. Which kind it is decides whether a claim already in progress sees it.</p>
+    </div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead><tr><th>Kind</th><th>Examples</th><th>How a claim gets its version</th><th>Claims already running</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">Contract terms</td><td class="dim">Elimination period, benefit period, definition of disability, riders, residual formula</td><td>From the policy form the policy was issued on, pinned on the benefit line at approval</td><td><strong>Never change.</strong> The policy is a contract.</td></tr>
+          <tr><td class="strong">Regulation</td><td class="dim">State claim-handling rules: letter timing, decision limits, interest on late payments</td><td>By effective date</td><td><strong>Change on the effective date</strong>, for every open claim in that state</td></tr>
+          <tr><td class="strong">Internal handling</td><td class="dim">Letter wording, requirement sets, review cadence, automation rules</td><td>By release</td><td><strong>Change from the release</strong>, unless compliance says a change would disadvantage the claimant</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Three claims, one timeline</h2></div>
+    <figure>
+      <div class="canvas">
+        <svg class="d wide" viewBox="0 0 1200 430" role="img" aria-label="Timeline from 2026 to 2029 with three claims. Claim A, on a 2019 policy form, keeps 2019 terms throughout, switches to v2 letters when they are released in April 2027, and to the new state interest rule on its effective date in July 2027. Claim B, on the new 2027 policy form, starts with 2027 terms. Claim C is filed after the 2027 form went on sale but is on an older 2019 policy, so it keeps 2019 terms.">
+          <!-- events -->
+          <line class="ln dash" x1="588" y1="40" x2="588" y2="384"/>
+          <text class="lbl" x="594" y="34">policy form 2027 goes on sale</text>
+          <line class="ln dash" x1="660" y1="56" x2="660" y2="384"/>
+          <text class="lbl" x="666" y="50">letters v2 released</text>
+          <line class="ln dash" x1="732" y1="72" x2="732" y2="384"/>
+          <text class="lbl" x="738" y="66">state interest rule takes effect</text>
+
+          <!-- claim A -->
+          <text class="t" x="24" y="112">Claim A</text>
+          <text class="s" x="24" y="129">policy form 2019</text>
+          <text class="s" x="24" y="145">filed Mar 2026</text>
+          <text class="s" x="290" y="111" text-anchor="end">contract terms</text>
+          <text class="s" x="290" y="133" text-anchor="end">handling</text>
+          <text class="s" x="290" y="155" text-anchor="end">regulation</text>
+          <rect class="box pg" x="348" y="98" width="660" height="18" rx="3"/>
+          <text class="s" x="358" y="111">policy form 2019 terms</text>
+          <rect class="box" x="348" y="120" width="312" height="18" rx="3"/>
+          <text class="s" x="358" y="133">letters v1</text>
+          <rect class="box tmp" x="660" y="120" width="348" height="18" rx="3"/>
+          <text class="s" x="670" y="133">letters v2</text>
+          <rect class="box" x="348" y="142" width="384" height="18" rx="3"/>
+          <text class="s" x="358" y="155">old interest rule</text>
+          <rect class="box tmp" x="732" y="142" width="276" height="18" rx="3"/>
+          <text class="s" x="742" y="155">new interest rule</text>
+          <text class="s" x="1016" y="133">recovered</text>
+
+          <!-- claim B -->
+          <text class="t" x="24" y="212">Claim B</text>
+          <text class="s" x="24" y="229">policy form 2027</text>
+          <text class="s" x="24" y="245">filed Jun 2027</text>
+          <text class="s" x="290" y="211" text-anchor="end">contract terms</text>
+          <text class="s" x="290" y="233" text-anchor="end">handling</text>
+          <text class="s" x="290" y="255" text-anchor="end">regulation</text>
+          <rect class="box tmp" x="708" y="198" width="456" height="18" rx="3"/>
+          <text class="s" x="742" y="211">policy form 2027 terms</text>
+          <rect class="box tmp" x="708" y="220" width="456" height="18" rx="3"/>
+          <text class="s" x="742" y="233">letters v2</text>
+          <rect class="box" x="708" y="242" width="24" height="18" rx="3"/>
+          <rect class="box tmp" x="732" y="242" width="432" height="18" rx="3"/>
+          <text class="s" x="742" y="255">new interest rule</text>
+
+          <!-- claim C -->
+          <text class="t" x="24" y="312">Claim C</text>
+          <text class="s" x="24" y="329">policy form 2019</text>
+          <text class="s" x="24" y="345">filed Oct 2027</text>
+          <text class="s" x="290" y="311" text-anchor="end">contract terms</text>
+          <text class="s" x="290" y="333" text-anchor="end">handling</text>
+          <text class="s" x="290" y="355" text-anchor="end">regulation</text>
+          <rect class="box pg" x="804" y="298" width="360" height="18" rx="3"/>
+          <text class="s" x="814" y="311">policy form 2019 terms</text>
+          <rect class="box tmp" x="804" y="320" width="360" height="18" rx="3"/>
+          <text class="s" x="814" y="333">letters v2</text>
+          <rect class="box tmp" x="804" y="342" width="360" height="18" rx="3"/>
+          <text class="s" x="814" y="355">new interest rule</text>
+
+          <!-- axis -->
+          <line class="ln" x1="300" y1="392" x2="1164" y2="392"/>
+          <line class="ln" x1="300" y1="386" x2="300" y2="398"/>
+          <line class="ln" x1="588" y1="386" x2="588" y2="398"/>
+          <line class="ln" x1="876" y1="386" x2="876" y2="398"/>
+          <line class="ln" x1="1164" y1="386" x2="1164" y2="398"/>
+          <text class="lbl" x="300" y="416" text-anchor="middle">2026</text>
+          <text class="lbl" x="588" y="416" text-anchor="middle">2027</text>
+          <text class="lbl" x="876" y="416" text-anchor="middle">2028</text>
+          <text class="lbl" x="1164" y="416" text-anchor="middle">2029</text>
+        </svg>
+      </div>
+      <figcaption><span>Claim C is the one to remember. It's filed after the 2027 form went on sale, but its policy was issued on the 2019 form, so it keeps 2019 terms for its whole life. The version comes from the policy, not from the date of the claim. Handling and regulation changes reach every open claim. Shaded segments show where the newer version applies.</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>The change ladder</h2>
+      <p class="note">Four levels. The higher the level, the more parts change, and the more people sign off.</p>
+    </div>
+    <div class="tablewrap">
+      <table class="min">
+        <thead>
+          <tr><th>Level</th><th>Example</th><th>Product config</th><th>Rules version</th><th>Letters, requirements</th><th>Deadline kinds</th><th>Workflows</th><th>State machine</th><th>Signed off by</th><th>Lead time</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="strong">1 · New parameter</td><td class="dim">A 180-day elimination period option</td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-no" aria-hidden="true">–</span><span class="vh">no change</span></td>
+            <td class="dot"><span class="dot-maybe" aria-hidden="true">◐</span><span class="vh">maybe</span></td>
+            <td class="dot"><span class="dot-no" aria-hidden="true">–</span><span class="vh">no change</span></td>
+            <td class="dot"><span class="dot-no" aria-hidden="true">–</span><span class="vh">no change</span></td>
+            <td class="dot"><span class="dot-no" aria-hidden="true">–</span><span class="vh">no change</span></td>
+            <td class="dim">Product, compliance</td><td>Days</td></tr>
+          <tr><td class="strong">2 · New rule or formula</td><td class="dim">A new residual benefit formula</td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-maybe" aria-hidden="true">◐</span><span class="vh">maybe</span></td>
+            <td class="dot"><span class="dot-no" aria-hidden="true">–</span><span class="vh">no change</span></td>
+            <td class="dot"><span class="dot-no" aria-hidden="true">–</span><span class="vh">no change</span></td>
+            <td class="dot"><span class="dot-no" aria-hidden="true">–</span><span class="vh">no change</span></td>
+            <td class="dim">Product, actuarial, compliance</td><td>Weeks</td></tr>
+          <tr><td class="strong">3 · New rider with new events</td><td class="dim">A catastrophic disability rider: extra benefit if the claimant can't do 2 of 6 daily activities</td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-no" aria-hidden="true">–</span><span class="vh">no change</span></td>
+            <td class="dim">Level 2 plus engineering</td><td>Weeks to months</td></tr>
+          <tr><td class="strong">4 · New product shape</td><td class="dim">Disability buy-out, paid as a lump sum. Long-term care later.</td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dot"><span class="dot-yes" aria-hidden="true">●</span><span class="vh">changes</span></td>
+            <td class="dim">Level 3 plus finance</td><td>Months</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">● changes · ◐ may change · – unchanged. Levels 1 and 2 are made in the configuration studio and need no deploy. Levels 3 and 4 add code, but the code is switched on by product configuration, so it only runs for policies that have the new rider or product.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Rolling out a level 3 change</h2>
+      <p class="note">Example: adding the catastrophic disability rider. Levels 1 and 2 skip the engineering lane.</p>
+    </div>
+    <figure>
+      <div class="canvas" data-swimlane="rollout"></div>
+      <figcaption><span>Engineering adds one new deadline kind (a periodic review of daily activities) and one event workflow (the assessment). Everything else is configuration: the rider's parameters, its letters and its requirement sets. Before approval, a simulation runs 500 sample claims through the new rules, and the results are compared with the actuary's expectations. From the effective date, new claims on policies with the rider pin rider v1. Claims already running are unchanged.</span></figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="head"><h2>Checklist for any new variation</h2></div>
+    <ol class="decisions">
+      <li><strong>1 · Place it on the ladder</strong><span>The level decides who signs off and whether engineering is involved.</span></li>
+      <li><strong>2 · Define it in product configuration</strong><span>Record which policy forms it applies to and its effective date.</span></li>
+      <li><strong>3 · List the deadlines each state needs</strong><span>The nightly check then knows what to expect from day one.</span></li>
+      <li><strong>4 · Letters and requirement sets</strong><span>Compliance approves the wording and any state filings.</span></li>
+      <li><strong>5 · Code, for level 3 and up</strong><span>New deadline kinds, handlers and workflows, switched on only by the product configuration.</span></li>
+      <li><strong>6 · Simulate</strong><span>Run sample and past claims through it and compare the results with the actuary's expectations.</span></li>
+      <li><strong>7 · Go live on the effective date</strong><span>New claims pin the new version. Claims already running keep theirs.</span></li>
+      <li><strong>8 · Watch the first claims</strong><span>Review the first 90 days of claims with product and actuarial.</span></li>
+    </ol>
+  </section>
+</div>
+
+<script>
+(function () {
+  Swimlane.add('rollout', {
+    aria: 'Rollout of a catastrophic disability rider over six phases: product defines terms and compliance files forms; configuration and engineering build rider parameters, letters, a new deadline kind and a new event workflow; testing simulates 500 claims; compliance approves; on the effective date new claims pin rider v1; after launch product watches the first claims while running claims stay unchanged.',
+    lanes: [
+      { id: 'product', name: 'Product', sub: 'and actuarial' },
+      { id: 'compliance', name: 'Compliance', sub: 'filings, letters' },
+      { id: 'config', name: 'Configuration', sub: 'versioned in Postgres', tint: 'pg' },
+      { id: 'eng', name: 'Engineering', sub: 'code and workflows', tint: 'tmp' },
+      { id: 'test', name: 'Test', sub: 'and simulation' },
+      { id: 'live', name: 'Live claims', sub: 'after launch' }
+    ],
+    phases: [
+      { n: 'Define', c: 'weeks 1–2', w: 1.2 },
+      { n: 'Configure and build', c: 'weeks 2–6', w: 1.6 },
+      { n: 'Test', c: 'weeks 5–8', w: 1.4 },
+      { n: 'Approve', c: 'week 8', w: 1.1 },
+      { n: 'Effective date', c: '1 Jan 2027', w: 1.3 },
+      { n: 'After launch', c: 'first 90 days', w: 1.4 }
+    ],
+    items: [
+      ['product', 0, .5, 0, 'chip', 'terms and triggers'],
+      ['product', 5, .5, 0, 'chip', 'watch first claims'],
+      ['compliance', 0, .5, 0, 'chip', 'forms filed in states'],
+      ['compliance', 3, .5, 0, 'chip', 'approves letters'],
+      ['config', 1, .5, 0, 'chip', 'rider v1 parameters'],
+      ['config', 1, .5, 1, 'chip', 'letters, requirements'],
+      ['config', 4, .5, 0, 'chip', 'v1 effective 1 Jan'],
+      ['eng', 1, .5, 0, 'due', 'deadline kind: activity review'],
+      ['eng', 1, .5, 1, 'wfE', 'new: assessment workflow'],
+      ['eng', 2, .5, 0, 'chip', 'unit and replay tests'],
+      ['test', 2, .5, 0, 'chip', 'simulate 500 claims'],
+      ['test', 2, .5, 1, 'chip', 'compare to actuarial'],
+      ['live', 4, .5, 0, 'chip', 'new claims pin rider v1'],
+      ['live', 5, .5, 0, 'chip', 'running claims unchanged']
+    ]
+  });
+})();
+</script>
+</body>
+</html>
