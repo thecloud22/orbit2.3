@@ -70,4 +70,4 @@ Rule values (15- and 30-day limits, 3.5% interest, the $500,000 fast-track limit
 
 ## License
 
-No license has been chosen yet, so by default all rights are reserved.
+[MIT](LICENSE). You can use, copy, modify and share it, including commercially. The claims, people and rule values are examples, not advice, and the software is provided as is.
